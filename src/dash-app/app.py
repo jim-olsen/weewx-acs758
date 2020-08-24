@@ -9,6 +9,10 @@ from dash.dependencies import Input, Output
 
 current_graph = 0
 graph_data = {}
+# Set this value to the ip of your tristar charge controller
+tristar_addr = '10.0.10.10'
+# Set this value to the base url of your arduino running the acs758 monitoring
+arduino_addr = 'http://10.0.10.128'
 
 #
 # Our main html style definitions that are shared
@@ -34,7 +38,7 @@ graphStyle = {
 	'height': 280
 }
 
-#Initialize the dash app and the main html page
+# Initialize the dash app and the main html page
 app = dash.Dash(__name__)
 app.layout = html.Div(
 	style = divStyle,
@@ -71,8 +75,9 @@ def update_text_metrics(n):
 	td_style = {'border': '1px solid #fca503', 'text-align' : 'center', 'font-size': '30px', 'font-family': 'cursive'}
 
 	# Make a rest call to the arduino to fetch the current amperage value on the battery sensor
-	resp = requests.get('http://10.0.10.128/A0')
+	resp = requests.get(arduino_addr + '/A0')
 	current_load = 'N/A'
+	resp_dict = {}
 	if resp.status_code == 200:
 		resp_dict = resp.json()
 		print('Received: ')
@@ -81,11 +86,12 @@ def update_text_metrics(n):
 		table_elements.append(html.Td(style=td_style, children=current_load))
 		header_row.append(html.Th(style=td_style, children='Battery Load'))
 	else:
-		print('Failed to communicate to arduino: ' + resp.status_code)
+		print('Failed to communicate to arduino: ' + str(resp.status_code))
+		resp_dict['A0'] = 0
 
 	# Connect directly to the modbus interface on the tristar charge controller to get the current information about
 	# the state of the solar array and battery charging
-	modbus_client = ModbusTcpClient('10.0.10.10', port=502)
+	modbus_client = ModbusTcpClient(tristar_addr, port=502)
 	try:
 		modbus_client.connect()
 		rr = modbus_client.read_holding_registers(0, 91, unit=1)
@@ -139,6 +145,7 @@ def update_text_metrics(n):
 	return html.Table(style={'width': '100%', 'border': '1px solid #fca503'},
 					children=[html.Tr(header_row), html.Tr(table_elements)])
 
+
 #
 # Create the actual graph object, also keeping in mind the currently selected graph that we want to display
 #
@@ -159,6 +166,7 @@ def create_graph():
 						  'type': 'scatter', 'marker' : {'color': '#fca503'}}, 1, 1)
 	return fig
 
+
 #
 # Our callback for both the next graph button, as well as the interval.  Dash only allows one callback per output.  In
 # this case, we want to adjust the graph based on both of these items, so we check to see which input triggered it and
@@ -172,7 +180,7 @@ def update_graph_live(n, n_clicks):
 
 	# If this is triggered by the interval, update the data
 	if dash.callback_context.triggered[0]['prop_id'].split('.')[0] != 'next-graph':
-		resp = requests.get('http://10.0.10.128/A0')
+		resp = requests.get(arduino_addr + '/A0')
 		if resp.status_code == 200:
 			resp_dict = resp.json()
 			print('Received: ')
@@ -181,7 +189,7 @@ def update_graph_live(n, n_clicks):
 			graph_data['cabinload'].append(resp_dict['A0'])
 			# Connect directly to the modbus interface on the tristar charge controller to get the current information about
 			# the state of the solar array and battery charging
-			modbus_client = ModbusTcpClient('10.0.10.10', port=502)
+			modbus_client = ModbusTcpClient(tristar_addr, port=502)
 			try:
 				modbus_client.connect()
 				rr = modbus_client.read_holding_registers(0, 91, unit=1)
