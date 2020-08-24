@@ -7,11 +7,17 @@ import requests
 from pymodbus.client.sync import ModbusTcpClient
 from dash.dependencies import Input, Output
 
+current_graph = 0
+graph_data = {}
+
+#
+# Our main html style definitions that are shared
+#
 main_div_style = {
 	'backgroundColor': '#111111',
 	'color': '#fca503',
 	'height': '100%',
-	'width' : '100%'
+	'width': '100%'
 }
 
 divStyle = {
@@ -25,9 +31,10 @@ graphStyle = {
 	'font': {
 		'color': '#fca503'
 	},
-	'height': 340
+	'height': 280
 }
 
+#Initialize the dash app and the main html page
 app = dash.Dash(__name__)
 app.layout = html.Div(
 	style = divStyle,
@@ -36,7 +43,9 @@ app.layout = html.Div(
 		style = main_div_style,
 		children = [
 		html.Div(id='live-update-text'),
+		html.Div(id='live-update-button'),
 		dcc.Graph(id='live-update-graph'),
+		html.Button('Next Graph >>>', id='next-graph', n_clicks=0, style={'height': '60px', 'width':'240px'}),
 		dcc.Interval(
 			id='text-interval-component',
 			interval=5000,  # in milliseconds
@@ -51,11 +60,17 @@ app.layout = html.Div(
 )
 
 
+#
+# Fetch the data from both the tristar charge controller and the arduino running the current sensor and update
+# the text elements displaying the live dta point
+#
 @app.callback(Output('live-update-text', 'children'), [Input('text-interval-component', 'n_intervals')])
 def update_text_metrics(n):
 	table_elements = []
 	header_row = []
 	td_style = {'border': '1px solid #fca503', 'text-align' : 'center', 'font-size': '30px', 'font-family': 'cursive'}
+
+	# Make a rest call to the arduino to fetch the current amperage value on the battery sensor
 	resp = requests.get('http://10.0.10.128/A0')
 	current_load = 'N/A'
 	if resp.status_code == 200:
@@ -68,6 +83,8 @@ def update_text_metrics(n):
 	else:
 		print('Failed to communicate to arduino: ' + resp.status_code)
 
+	# Connect directly to the modbus interface on the tristar charge controller to get the current information about
+	# the state of the solar array and battery charging
 	modbus_client = ModbusTcpClient('10.0.10.10', port=502)
 	try:
 		modbus_client.connect()
@@ -116,40 +133,91 @@ def update_text_metrics(n):
 			modbus_client.close()
 
 	except Exception as e:
-		print("Failed to connect to tristar modbus" + e)
+		print("Failed to connect to tristar modbus")
 		modbus_client.close()
 
 	return html.Table(style={'width': '100%', 'border': '1px solid #fca503'},
 					children=[html.Tr(header_row), html.Tr(table_elements)])
 
-@app.callback(Output('live-update-graph', 'figure'), [Input('graph-interval-component', 'n_intervals')])
-def update_graph_live(n):
+#
+# Create the actual graph object, also keeping in mind the currently selected graph that we want to display
+#
+def create_graph():
+	global current_graph
 	fig = plotly.tools.make_subplots(rows=2, cols=1, vertical_spacing=0.2)
-	resp = requests.get('http://10.0.10.128/A0')
-	current_load = 'N/A'
-	if resp.status_code == 200:
-		resp_dict = resp.json()
-		print('Received: ')
-		print(resp_dict)
-		graphData['time'].append(datetime.datetime.now())
-		graphData['cabinload'].append(resp_dict['A0'])
-		if len(graphData) > 1440:
-			graphData['time'].pop(0)
-			graphData['cabinload'].pop(0)
-
-		fig['layout'] = graphStyle
-		fig['layout']['margin'] = {'l': 30, 'r': 10, 'b': 30, 't': 10}
-		fig['layout']['legend'] = {'x': 0, 'y': 1, 'xanchor': 'left'}
-		fig.append_trace({'x': graphData['time'], 'y': graphData['cabinload'], 'name': 'Load', 'mode': 'lines+markers',
-					  'type': 'scatter'}, 1, 1)
-	else:
-		print('Failed to communicate to arduino: ' + resp.status_code)
+	fig['layout'] = graphStyle
+	fig['layout']['margin'] = {'l': 30, 'r': 10, 'b': 30, 't': 10}
+	fig['layout']['legend'] = {'x': 0, 'y': 1, 'xanchor': 'left'}
+	if current_graph == 0:
+		fig.append_trace({'x': graph_data['time'], 'y': graph_data['cabinload'], 'name': 'Load', 'mode': 'lines+markers',
+						  'type': 'scatter', 'marker' : {'color': '#fca503'}}, 1, 1)
+	if current_graph == 1:
+		fig.append_trace({'x': graph_data['time'], 'y': graph_data['voltage'], 'name': 'Voltage', 'mode': 'lines+markers',
+						  'type': 'scatter', 'marker' : {'color': '#fca503'}}, 1, 1)
+	if current_graph == 2:
+		fig.append_trace({'x': graph_data['time'], 'y': graph_data['watts'], 'name': 'Voltage', 'mode': 'lines+markers',
+						  'type': 'scatter', 'marker' : {'color': '#fca503'}}, 1, 1)
 	return fig
+
+#
+# Our callback for both the next graph button, as well as the interval.  Dash only allows one callback per output.  In
+# this case, we want to adjust the graph based on both of these items, so we check to see which input triggered it and
+# fetch new data if it is the interval, and adjust the currently selected graph if it is in fact the next graph button
+#
+@app.callback(Output('live-update-graph', 'figure'),
+				[Input('graph-interval-component', 'n_intervals'), Input('next-graph', 'n_clicks')])
+def update_graph_live(n, n_clicks):
+	global current_graph
+	global graph_data
+
+	# If this is triggered by the interval, update the data
+	if dash.callback_context.triggered[0]['prop_id'].split('.')[0] != 'next-graph':
+		resp = requests.get('http://10.0.10.128/A0')
+		if resp.status_code == 200:
+			resp_dict = resp.json()
+			print('Received: ')
+			print(resp_dict)
+			graph_data['time'].append(datetime.datetime.now())
+			graph_data['cabinload'].append(resp_dict['A0'])
+			# Connect directly to the modbus interface on the tristar charge controller to get the current information about
+			# the state of the solar array and battery charging
+			modbus_client = ModbusTcpClient('10.0.10.10', port=502)
+			try:
+				modbus_client.connect()
+				rr = modbus_client.read_holding_registers(0, 91, unit=1)
+				if rr is None:
+					modbus_client.close()
+					print("Failed to connect and read from tristar modbus")
+				else:
+					voltage_scaling_factor = (float(rr.registers[0]) + (float(rr.registers[1]) / 100))
+					amperage_scaling_factor = (float(rr.registers[2]) + (float(rr.registers[3]) / 100))
+					battery_voltage = float(rr.registers[24]) * voltage_scaling_factor * 2 ** (-15)
+					graph_data['voltage'].append(battery_voltage)
+					output_power = float(rr.registers[58]) * voltage_scaling_factor * amperage_scaling_factor * 2 ** (-17)
+					graph_data['watts'].append(output_power)
+
+					# If we have more than a days worth of graph data, start rotating out the old data
+					if len(graph_data) > 1440:
+						graph_data['time'].pop(0)
+						graph_data['cabinload'].pop(0)
+						graph_data['voltage'].pop(0)
+						graph_data['watts'].pop(0)
+					modbus_client.close()
+			except Exception as e:
+				print("Failed to connect to tristar modbus")
+				modbus_client.close()
+		else:
+			print('Failed to communicate to arduino: ' + resp.status_code)
+	else:
+		# The next graph button was pressed, so just update the selected graph and redraw
+		current_graph = (current_graph + 1) % 3
+
+	return create_graph()
 
 
 def main():
-	global graphData
-	graphData = {'cabinload': [], 'time': []}
+	global graph_data
+	graph_data = {'cabinload': [], 'time': [], 'voltage': [], 'watts': []}
 	app.run_server(debug=True, host='0.0.0.0')
 
 if __name__ == '__main__':
