@@ -25,7 +25,7 @@ graphStyle = {
 	'font': {
 		'color': '#fca503'
 	},
-	'height': 300
+	'height': 325
 }
 
 app = dash.Dash(__name__)
