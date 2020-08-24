@@ -10,7 +10,8 @@ from dash.dependencies import Input, Output
 main_div_style = {
 	'backgroundColor': '#111111',
 	'color': '#fca503',
-	'height': '90vh'
+	'height': '100%',
+	'width' : '100%'
 }
 
 divStyle = {
@@ -81,7 +82,7 @@ def update_text_metrics(n):
 			battery_voltage = float(rr.registers[24]) * voltage_scaling_factor * 2 ** (-15)
 			table_elements.append(html.Td(style=td_style, children='{0:.2f} V'.format(battery_voltage)))
 			header_row.append(html.Th(style=td_style, children='Battery Voltage'))
-			table_elements.append(html.Td(style=td_style, children='{0:0.0f} Watts'.format(battery_voltage * resp_dict['A0'])))
+			table_elements.append(html.Td(style=td_style, children='{0:0.0f} W'.format(battery_voltage * resp_dict['A0'])))
 			header_row.append(html.Th(style=td_style, children='Load Watts'))
 			battery_sense_voltage = float(rr.registers[26]) * voltage_scaling_factor * 2 ** (-15)
 			battery_voltage_slow = float(rr.registers[38]) * voltage_scaling_factor * 2 ** (-15)
@@ -96,7 +97,7 @@ def update_text_metrics(n):
 			# Wattage Related Statistics
 			input_power = float(rr.registers[59]) * voltage_scaling_factor * amperage_scaling_factor * 2 ** (-17)
 			output_power = float(rr.registers[58]) * voltage_scaling_factor * amperage_scaling_factor * 2 ** (-17)
-			table_elements.append(html.Td(style=td_style, children='{0:0.0f} Watts'.format(output_power)))
+			table_elements.append(html.Td(style=td_style, children='{0:0.0f} W'.format(output_power)))
 			header_row.append(html.Th(style=td_style, children='Solar Array Watts'))
 			# Temperature Statistics
 			heatsink_temperature = rr.registers[35]
@@ -117,7 +118,7 @@ def update_text_metrics(n):
 		print("Failed to connect to tristar modbus" + e)
 		modbus_client.close()
 
-	return html.Table(style={'width': '100vw', 'border': '1px solid #fca503'},
+	return html.Table(style={'width': '100%', 'border': '1px solid #fca503'},
 					children=[html.Tr(header_row), html.Tr(table_elements)])
 
 @app.callback(Output('live-update-graph', 'figure'), [Input('graph-interval-component', 'n_intervals')])
