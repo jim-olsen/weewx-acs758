@@ -24,7 +24,8 @@ graphStyle = {
 	'paper_bgcolor': '#111111',
 	'font': {
 		'color': '#fca503'
-	}
+	},
+	'height': 300
 }
 
 app = dash.Dash(__name__)
@@ -136,7 +137,7 @@ def update_graph_live(n):
 			graphData['time'].pop(0)
 			graphData['cabinload'].pop(0)
 
-		fig['layout'] = graphStyle;
+		fig['layout'] = graphStyle
 		fig['layout']['margin'] = {'l': 30, 'r': 10, 'b': 30, 't': 10}
 		fig['layout']['legend'] = {'x': 0, 'y': 1, 'xanchor': 'left'}
 		fig.append_trace({'x': graphData['time'], 'y': graphData['cabinload'], 'name': 'Load', 'mode': 'lines+markers',
