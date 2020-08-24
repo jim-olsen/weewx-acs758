@@ -10,7 +10,7 @@ from dash.dependencies import Input, Output
 main_div_style = {
 	'backgroundColor': '#111111',
 	'color': '#fca503',
-	'height': '100vh'
+	'height': '90vh'
 }
 
 divStyle = {
@@ -33,7 +33,6 @@ app.layout = html.Div(
 	html.Div(
 		style = main_div_style,
 		children = [
-		html.H2('Cabin Electric Load'),
 		html.Div(id='live-update-text'),
 		dcc.Graph(id='live-update-graph'),
 		dcc.Interval(
@@ -54,7 +53,7 @@ app.layout = html.Div(
 def update_text_metrics(n):
 	table_elements = []
 	header_row = []
-	td_style = {'border': '1px solid #fca503', 'text-align' : 'center'}
+	td_style = {'border': '1px solid #fca503', 'text-align' : 'center', 'font-size': '30px', 'font-family': 'cursive'}
 	resp = requests.get('http://10.0.10.128/A0')
 	current_load = 'N/A'
 	if resp.status_code == 200:
