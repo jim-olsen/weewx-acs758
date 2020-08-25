@@ -159,25 +159,25 @@ def create_graph():
 	if current_graph == 1:
 		fig.append_trace(
 			{'x': graph_data['time'], 'y': graph_data['battvoltage'], 'name': 'Batt Voltage', 'mode': 'lines',
-				'type': 'scatter', 'marker': {'color': '#fca503'}}, 1, 1)
+				'type': 'scatter', 'marker': {'color': '#fca503'}, 'line_shape': 'spline'}, 1, 1)
 		fig['layout']['title'] = {'text': 'Batt Voltage', 'xanchor': 'right', 'yanchor': 'bottom', 'x': 0.5, 'y': 0}
 	if current_graph == 2:
 		fig.append_trace(
 			{'x': graph_data['time'], 'y': graph_data['battwatts'], 'name': 'Batt Watts', 'mode': 'lines',
-				'type': 'scatter', 'marker': {'color': '#fca503'}}, 1, 1)
+				'type': 'scatter', 'marker': {'color': '#fca503'}, 'line_shape': 'spline'}, 1, 1)
 		fig['layout']['title'] = {'text': 'Batt Watts', 'xanchor': 'right', 'yanchor': 'bottom', 'x': 0.5, 'y': 0}
 	if current_graph == 3:
 		fig.append_trace(
 			{'x': graph_data['time'], 'y': graph_data['solarwatts'], 'name': 'Solar Watts', 'mode': 'lines',
-			 'type': 'scatter', 'marker': {'color': '#fca503'}}, 1, 1)
+			 'type': 'scatter', 'marker': {'color': '#fca503'}, 'line_shape': 'spline'}, 1, 1)
 		fig['layout']['title'] = {'text': 'Solar Watts', 'xanchor': 'right', 'yanchor': 'bottom', 'x': 0.5, 'y': 0}
 	if current_graph == 4:
 		fig.append_trace(
 			{'x': graph_data['time'], 'y': graph_data['battwatts'], 'name': 'Batt Watts', 'mode': 'lines',
-			 'type': 'scatter', 'marker': {'color': '#eb1717'}}, 1, 1)
+			 'type': 'scatter', 'marker': {'color': '#eb1717'}, 'line_shape': 'spline'}, 1, 1)
 		fig.append_trace(
 			{'x': graph_data['time'], 'y': graph_data['solarwatts'], 'name': 'Solar Watts', 'mode': 'lines',
-			 'type': 'scatter', 'marker': {'color': '#fbff19'}}, 1, 1)
+			 'type': 'scatter', 'marker': {'color': '#fbff19'}, 'line_shape': 'spline'}, 1, 1)
 		fig['layout']['title'] = {'text': 'Batt and Solar Watts', 'xanchor': 'right', 'yanchor': 'bottom', 'x': 0.5, 'y': 0}
 
 	return fig
