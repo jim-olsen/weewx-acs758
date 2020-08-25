@@ -41,26 +41,26 @@ graphStyle = {
 # Initialize the dash app and the main html page
 app = dash.Dash(__name__)
 app.layout = html.Div(
-	style = divStyle,
-	children = [
-	html.Div(
-		style = main_div_style,
-		children = [
-		html.Div(id='live-update-text'),
-		html.Div(id='live-update-button'),
-		dcc.Graph(id='live-update-graph'),
-		html.Button('Next Graph >>>', id='next-graph', n_clicks=0, style={'height': '60px', 'width':'240px'}),
-		dcc.Interval(
-			id='text-interval-component',
-			interval=5000,  # in milliseconds
-			n_intervals=0
-		),
-		dcc.Interval(
-			id='graph-interval-component',
-			interval=60000,  # in milliseconds
-			n_intervals=0
-			)
-		])]
+	style=divStyle,
+	children=[
+		html.Div(
+			style=main_div_style,
+			children=[
+				html.Div(id='live-update-text'),
+				html.Div(id='live-update-button'),
+				dcc.Graph(id='live-update-graph'),
+				html.Button('Next Graph >>>', id='next-graph', n_clicks=0, style={'height': '60px', 'width': '240px'}),
+				dcc.Interval(
+					id='text-interval-component',
+					interval=5000,  # in milliseconds
+					n_intervals=0
+				),
+				dcc.Interval(
+					id='graph-interval-component',
+					interval=60000,  # in milliseconds
+					n_intervals=0
+				)
+			])]
 )
 
 
@@ -72,7 +72,7 @@ app.layout = html.Div(
 def update_text_metrics(n):
 	table_elements = []
 	header_row = []
-	td_style = {'border': '1px solid #fca503', 'text-align' : 'center', 'font-size': '30px', 'font-family': 'cursive'}
+	td_style = {'border': '1px solid #fca503', 'text-align': 'center', 'font-size': '30px', 'font-family': 'cursive'}
 
 	# Make a rest call to the arduino to fetch the current amperage value on the battery sensor
 	resp = requests.get(arduino_addr + '/A0')
@@ -106,7 +106,8 @@ def update_text_metrics(n):
 			battery_voltage = float(rr.registers[24]) * voltage_scaling_factor * 2 ** (-15)
 			table_elements.append(html.Td(style=td_style, children='{0:.2f} V'.format(battery_voltage)))
 			header_row.append(html.Th(style=td_style, children='Batt Voltage'))
-			table_elements.append(html.Td(style=td_style, children='{0:0.0f} W'.format(battery_voltage * resp_dict['A0'])))
+			table_elements.append(
+				html.Td(style=td_style, children='{0:0.0f} W'.format(battery_voltage * resp_dict['A0'])))
 			header_row.append(html.Th(style=td_style, children='Batt Watts'))
 			battery_sense_voltage = float(rr.registers[26]) * voltage_scaling_factor * 2 ** (-15)
 			battery_voltage_slow = float(rr.registers[38]) * voltage_scaling_factor * 2 ** (-15)
@@ -127,9 +128,7 @@ def update_text_metrics(n):
 			heatsink_temperature = rr.registers[35]
 			battery_temperature = rr.registers[36]
 			# Misc Statistics
-			charge_states = ["START", "NIGHT_CHECK", "DISCONNECT", "NIGHT", "FAULT", "MPPT", "ABSORPTION", "FLOAT",
-							 "EQUALIZE",
-							 "SLAVE"]
+			charge_states = ["START", "NIGHT_CHECK", "DISCONNECT", "NIGHT", "FAULT", "MPPT", "ABSORPTION", "FLOAT", "EQUALIZE", "SLAVE"]
 			charge_state = charge_states[rr.registers[50]]
 			table_elements.append(html.Td(style=td_style, children=charge_state))
 			header_row.append(html.Th(style=td_style, children='Charge State'))
@@ -142,8 +141,7 @@ def update_text_metrics(n):
 		print("Failed to connect to tristar modbus")
 		modbus_client.close()
 
-	return html.Table(style={'width': '100%', 'border': '1px solid #fca503'},
-					children=[html.Tr(header_row), html.Tr(table_elements)])
+	return html.Table(style={'width': '100%', 'border': '1px solid #fca503'}, children=[html.Tr(header_row), html.Tr(table_elements)])
 
 
 #
@@ -156,14 +154,17 @@ def create_graph():
 	fig['layout']['margin'] = {'l': 30, 'r': 10, 'b': 30, 't': 10}
 	fig['layout']['legend'] = {'x': 0, 'y': 1, 'xanchor': 'left'}
 	if current_graph == 0:
-		fig.append_trace({'x': graph_data['time'], 'y': graph_data['cabinload'], 'name': 'Load', 'mode': 'lines+markers',
-						  'type': 'scatter', 'marker' : {'color': '#fca503'}}, 1, 1)
+		fig.append_trace(
+			{'x': graph_data['time'], 'y': graph_data['cabinload'], 'name': 'Load', 'mode': 'lines+markers',
+				'type': 'scatter', 'marker': {'color': '#fca503'}}, 1, 1)
 	if current_graph == 1:
-		fig.append_trace({'x': graph_data['time'], 'y': graph_data['voltage'], 'name': 'Voltage', 'mode': 'lines+markers',
-						  'type': 'scatter', 'marker' : {'color': '#fca503'}}, 1, 1)
+		fig.append_trace(
+			{'x': graph_data['time'], 'y': graph_data['voltage'], 'name': 'Voltage', 'mode': 'lines+markers',
+				'type': 'scatter', 'marker': {'color': '#fca503'}}, 1, 1)
 	if current_graph == 2:
-		fig.append_trace({'x': graph_data['time'], 'y': graph_data['watts'], 'name': 'Voltage', 'mode': 'lines+markers',
-						  'type': 'scatter', 'marker' : {'color': '#fca503'}}, 1, 1)
+		fig.append_trace(
+			{'x': graph_data['time'], 'y': graph_data['watts'], 'name': 'Voltage', 'mode': 'lines+markers',
+				'type': 'scatter', 'marker': {'color': '#fca503'}}, 1, 1)
 	return fig
 
 
@@ -201,7 +202,8 @@ def update_graph_live(n, n_clicks):
 					amperage_scaling_factor = (float(rr.registers[2]) + (float(rr.registers[3]) / 100))
 					battery_voltage = float(rr.registers[24]) * voltage_scaling_factor * 2 ** (-15)
 					graph_data['voltage'].append(battery_voltage)
-					output_power = float(rr.registers[58]) * voltage_scaling_factor * amperage_scaling_factor * 2 ** (-17)
+					output_power = float(rr.registers[58]) * voltage_scaling_factor * amperage_scaling_factor * 2 ** (
+						-17)
 					graph_data['watts'].append(output_power)
 
 					# If we have more than a days worth of graph data, start rotating out the old data
@@ -227,6 +229,7 @@ def main():
 	global graph_data
 	graph_data = {'cabinload': [], 'time': [], 'voltage': [], 'watts': []}
 	app.run_server(debug=True, host='0.0.0.0')
+
 
 if __name__ == '__main__':
 	main()
