@@ -49,7 +49,9 @@ app.layout = html.Div(
 				html.Div(id='live-update-text'),
 				html.Div(id='live-update-button'),
 				dcc.Graph(id='live-update-graph'),
-				html.Button('Next Graph >>>', id='next-graph', n_clicks=0, style={'height': '60px', 'width': '240px'}),
+				html.Div(children=[html.Button('<<< Previous Graph', id='prev-graph', n_clicks=0, style={'height': '60px', 'width': '240px'}),
+							html.Button('Next Graph >>>', id='next-graph', n_clicks=0, style={'height': '60px', 'width': '240px'})],
+							style={'display': 'flex', 'justify-content': 'space-between'}),
 				dcc.Interval(
 					id='text-interval-component',
 					interval=5000,  # in milliseconds
@@ -160,6 +162,9 @@ def create_graph():
 		fig.append_trace(
 			{'x': graph_data['time'], 'y': graph_data['battvoltage'], 'name': 'Batt Voltage', 'mode': 'lines',
 				'type': 'scatter', 'marker': {'color': '#fca503'}, 'line_shape': 'spline'}, 1, 1)
+		fig.append_trace(
+			{'x': graph_data['time'], 'y': graph_data['targetbattvoltage'], 'name': 'Target Batt Voltage', 'mode': 'lines',
+			 'type': 'scatter', 'marker': {'color': '#26f0ec'}, 'line_shape': 'spline'}, 1, 1)
 		fig['layout']['title'] = {'text': 'Batt Voltage', 'xanchor': 'right', 'yanchor': 'bottom', 'x': 0.5, 'y': 0}
 	if current_graph == 2:
 		fig.append_trace(
@@ -189,13 +194,13 @@ def create_graph():
 # fetch new data if it is the interval, and adjust the currently selected graph if it is in fact the next graph button
 #
 @app.callback(Output('live-update-graph', 'figure'),
-				[Input('graph-interval-component', 'n_intervals'), Input('next-graph', 'n_clicks')])
-def update_graph_live(n, n_clicks):
+				[Input('graph-interval-component', 'n_intervals'), Input('next-graph', 'n_clicks'), Input('prev-graph', 'n_clicks')])
+def update_graph_live(n, n_clicks, n2_clicks):
 	global current_graph
 	global graph_data
 
 	# If this is triggered by the interval, update the data
-	if dash.callback_context.triggered[0]['prop_id'].split('.')[0] != 'next-graph':
+	if dash.callback_context.triggered[0]['prop_id'].split('.')[0] == 'graph-interval-component':
 		resp = requests.get(arduino_addr + '/A0')
 		if resp.status_code == 200:
 			resp_dict = resp.json()
@@ -216,6 +221,8 @@ def update_graph_live(n, n_clicks):
 					battery_voltage = float(rr.registers[24]) * voltage_scaling_factor * 2 ** (-15)
 					graph_data['battvoltage'].append(battery_voltage)
 					graph_data['battwatts'].append(battery_voltage * resp_dict['A0'])
+					target_regulation_voltage = float(rr.registers[51]) * voltage_scaling_factor * 2 ** (-15)
+					graph_data['targetbattvoltage'].append(target_regulation_voltage)
 					output_power = float(rr.registers[58]) * voltage_scaling_factor * amperage_scaling_factor * 2 ** (
 						-17)
 					graph_data['solarwatts'].append(output_power)
@@ -227,22 +234,28 @@ def update_graph_live(n, n_clicks):
 						graph_data['battvoltage'].pop(0)
 						graph_data['battwatts'].pop(0)
 						graph_data['solarwatts'].pop(0)
+						graph_data['targetbattvoltage'].pop(0)
 					modbus_client.close()
 			except Exception as e:
 				print("Failed to connect to tristar modbus")
 				modbus_client.close()
 		else:
-			print('Failed to communicate to arduino: ' + resp.status_code)
-	else:
+			print('Failed to communicate to arduino: ' + str(resp.status_code))
+	elif dash.callback_context.triggered[0]['prop_id'].split('.')[0] == 'next-graph':
 		# The next graph button was pressed, so just update the selected graph and redraw
 		current_graph = (current_graph + 1) % 5
+	elif dash.callback_context.triggered[0]['prop_id'].split('.')[0] == 'prev-graph':
+		# The next graph button was pressed, so just update the selected graph and redraw
+		current_graph = (current_graph - 1)
+		if current_graph < 0:
+			current_graph = 4
 
 	return create_graph()
 
 
 def main():
 	global graph_data
-	graph_data = {'battload': [], 'time': [], 'battvoltage': [], 'battwatts': [], 'solarwatts': []}
+	graph_data = {'battload': [], 'time': [], 'battvoltage': [], 'battwatts': [], 'solarwatts': [], 'targetbattvoltage': []}
 	app.run_server(debug=True, host='0.0.0.0')
 
 
