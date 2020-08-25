@@ -12,7 +12,7 @@ graph_data = {}
 # Set this value to the ip of your tristar charge controller
 tristar_addr = '10.0.10.10'
 # Set this value to the base url of your arduino running the acs758 monitoring
-arduino_addr = 'http://10.0.10.128'
+arduino_addr = 'http://10.0.10.33'
 
 #
 # Our main html style definitions that are shared
@@ -39,7 +39,7 @@ graphStyle = {
 }
 
 # Initialize the dash app and the main html page
-app = dash.Dash(__name__)
+app = dash.Dash('Cabin Energy Monitor')
 app.layout = html.Div(
 	style=divStyle,
 	children=[

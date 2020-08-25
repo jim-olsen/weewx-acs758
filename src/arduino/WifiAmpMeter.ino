@@ -6,6 +6,10 @@
 char ssid[] = SECRET_SSID;        // your network SSID (name)
 char pass[] = SECRET_PASS;    // your network password (use for WPA, or use as key for WEP)
 int keyIndex = 0;                 // your network key Index number (needed only for WEP)
+IPAddress ipAddr(10, 0, 10, 33);
+IPAddress dnsAddr(10, 0, 10, 31);
+IPAddress gwAddr(10, 0, 10, 254);
+IPAddress netMask(255, 255, 255, 0);
 
 int status = WL_IDLE_STATUS;
 WiFiServer server(80);
@@ -36,6 +40,8 @@ void setup() {
     Serial.print("Attempting to connect to Network named: ");
     Serial.println(ssid);                   // print the network name (SSID);
 
+    // Configure our IP address
+    WiFi.config(ipAddr, dnsAddr, gwAddr, netMask);
     // Connect to WPA/WPA2 network. Change this line if using open or WEP network:
     status = WiFi.begin(ssid, pass);
     // wait 10 seconds for connection:
@@ -54,6 +60,12 @@ void printWifiStatus() {
   IPAddress ip = WiFi.localIP();
   Serial.print("IP Address: ");
   Serial.println(ip);
+  IPAddress netmask = WiFi.subnetMask();
+  Serial.print("Netmask: ");
+  Serial.println(netmask);
+  IPAddress gwIp = WiFi.gatewayIP();
+  Serial.print("GW Address: ");
+  Serial.println(gwIp);
 
   // print the received signal strength:
   long rssi = WiFi.RSSI();
@@ -67,12 +79,12 @@ void printWifiStatus() {
 
 float getAmps(int portNum) {
   int sensorValue = analogRead(portNum);
-  
+
   float rawVoltage = sensorValue * (5.0 / 1023.0);
   float voltage = rawVoltage - (0.5 * 5.0) + .007;
-  
+
   float amps = voltage / (20.0 / 1000.0);
-  
+
   return amps;
 }
 
@@ -148,7 +160,7 @@ void loop() {
 
         if (currentLine.endsWith("GET /READALL")) {
           char strbuf[255];
-          
+
           outputLine+= "{ ";
           outputLine+= "\"A0\": ";
           outputLine+= dtostrf(getAmps(0),4, 2, strbuf);
