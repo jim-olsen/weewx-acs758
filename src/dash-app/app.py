@@ -105,9 +105,9 @@ def update_text_metrics(n):
 			# Voltage Related Statistics
 			battery_voltage = float(rr.registers[24]) * voltage_scaling_factor * 2 ** (-15)
 			table_elements.append(html.Td(style=td_style, children='{0:.2f} V'.format(battery_voltage)))
-			header_row.append(html.Th(style=td_style, children='Battery Voltage'))
+			header_row.append(html.Th(style=td_style, children='Batt Voltage'))
 			table_elements.append(html.Td(style=td_style, children='{0:0.0f} W'.format(battery_voltage * resp_dict['A0'])))
-			header_row.append(html.Th(style=td_style, children='Load Watts'))
+			header_row.append(html.Th(style=td_style, children='Batt Watts'))
 			battery_sense_voltage = float(rr.registers[26]) * voltage_scaling_factor * 2 ** (-15)
 			battery_voltage_slow = float(rr.registers[38]) * voltage_scaling_factor * 2 ** (-15)
 			battery_daily_minimum_voltage = float(rr.registers[64]) * voltage_scaling_factor * 2 ** (-15)
@@ -122,7 +122,7 @@ def update_text_metrics(n):
 			input_power = float(rr.registers[59]) * voltage_scaling_factor * amperage_scaling_factor * 2 ** (-17)
 			output_power = float(rr.registers[58]) * voltage_scaling_factor * amperage_scaling_factor * 2 ** (-17)
 			table_elements.append(html.Td(style=td_style, children='{0:0.0f} W'.format(output_power)))
-			header_row.append(html.Th(style=td_style, children='Solar Array Watts'))
+			header_row.append(html.Th(style=td_style, children='Solar Watts'))
 			# Temperature Statistics
 			heatsink_temperature = rr.registers[35]
 			battery_temperature = rr.registers[36]
