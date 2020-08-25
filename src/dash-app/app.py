@@ -80,8 +80,6 @@ def update_text_metrics(n):
 	resp_dict = {}
 	if resp.status_code == 200:
 		resp_dict = resp.json()
-		print('Received: ')
-		print(resp_dict)
 		current_load = '{0:.2f} A'.format(resp_dict['A0'])
 		table_elements.append(html.Td(style=td_style, children=current_load))
 		header_row.append(html.Th(style=td_style, children='Battery Load'))
@@ -152,19 +150,36 @@ def create_graph():
 	fig = plotly.tools.make_subplots(rows=2, cols=1, vertical_spacing=0.2)
 	fig['layout'] = graphStyle
 	fig['layout']['margin'] = {'l': 30, 'r': 10, 'b': 30, 't': 10}
-	fig['layout']['legend'] = {'x': 0, 'y': 1, 'xanchor': 'left'}
+	fig['layout']['legend'] = {'x': 0, 'y': 1, 'xanchor': 'right'}
 	if current_graph == 0:
 		fig.append_trace(
-			{'x': graph_data['time'], 'y': graph_data['cabinload'], 'name': 'Load', 'mode': 'lines+markers',
-				'type': 'scatter', 'marker': {'color': '#fca503'}}, 1, 1)
+			{'x': graph_data['time'], 'y': graph_data['battload'], 'name': 'Batt Load', 'mode': 'lines',
+				'type': 'scatter', 'marker': {'color': '#fca503'}, 'line_shape': 'spline'}, 1, 1)
+		fig['layout']['title'] = {'text': 'Batt Load', 'xanchor': 'right', 'yanchor': 'bottom', 'x': 0.5, 'y': 0}
 	if current_graph == 1:
 		fig.append_trace(
-			{'x': graph_data['time'], 'y': graph_data['voltage'], 'name': 'Voltage', 'mode': 'lines+markers',
+			{'x': graph_data['time'], 'y': graph_data['battvoltage'], 'name': 'Batt Voltage', 'mode': 'lines',
 				'type': 'scatter', 'marker': {'color': '#fca503'}}, 1, 1)
+		fig['layout']['title'] = {'text': 'Batt Voltage', 'xanchor': 'right', 'yanchor': 'bottom', 'x': 0.5, 'y': 0}
 	if current_graph == 2:
 		fig.append_trace(
-			{'x': graph_data['time'], 'y': graph_data['watts'], 'name': 'Voltage', 'mode': 'lines+markers',
+			{'x': graph_data['time'], 'y': graph_data['battwatts'], 'name': 'Batt Watts', 'mode': 'lines',
 				'type': 'scatter', 'marker': {'color': '#fca503'}}, 1, 1)
+		fig['layout']['title'] = {'text': 'Batt Watts', 'xanchor': 'right', 'yanchor': 'bottom', 'x': 0.5, 'y': 0}
+	if current_graph == 3:
+		fig.append_trace(
+			{'x': graph_data['time'], 'y': graph_data['solarwatts'], 'name': 'Solar Watts', 'mode': 'lines',
+			 'type': 'scatter', 'marker': {'color': '#fca503'}}, 1, 1)
+		fig['layout']['title'] = {'text': 'Solar Watts', 'xanchor': 'right', 'yanchor': 'bottom', 'x': 0.5, 'y': 0}
+	if current_graph == 4:
+		fig.append_trace(
+			{'x': graph_data['time'], 'y': graph_data['battwatts'], 'name': 'Batt Watts', 'mode': 'lines',
+			 'type': 'scatter', 'marker': {'color': '#eb1717'}}, 1, 1)
+		fig.append_trace(
+			{'x': graph_data['time'], 'y': graph_data['solarwatts'], 'name': 'Solar Watts', 'mode': 'lines',
+			 'type': 'scatter', 'marker': {'color': '#fbff19'}}, 1, 1)
+		fig['layout']['title'] = {'text': 'Batt and Solar Watts', 'xanchor': 'right', 'yanchor': 'bottom', 'x': 0.5, 'y': 0}
+
 	return fig
 
 
@@ -184,10 +199,8 @@ def update_graph_live(n, n_clicks):
 		resp = requests.get(arduino_addr + '/A0')
 		if resp.status_code == 200:
 			resp_dict = resp.json()
-			print('Received: ')
-			print(resp_dict)
 			graph_data['time'].append(datetime.datetime.now())
-			graph_data['cabinload'].append(resp_dict['A0'])
+			graph_data['battload'].append(resp_dict['A0'])
 			# Connect directly to the modbus interface on the tristar charge controller to get the current information about
 			# the state of the solar array and battery charging
 			modbus_client = ModbusTcpClient(tristar_addr, port=502)
@@ -201,17 +214,19 @@ def update_graph_live(n, n_clicks):
 					voltage_scaling_factor = (float(rr.registers[0]) + (float(rr.registers[1]) / 100))
 					amperage_scaling_factor = (float(rr.registers[2]) + (float(rr.registers[3]) / 100))
 					battery_voltage = float(rr.registers[24]) * voltage_scaling_factor * 2 ** (-15)
-					graph_data['voltage'].append(battery_voltage)
+					graph_data['battvoltage'].append(battery_voltage)
+					graph_data['battwatts'].append(battery_voltage * resp_dict['A0'])
 					output_power = float(rr.registers[58]) * voltage_scaling_factor * amperage_scaling_factor * 2 ** (
 						-17)
-					graph_data['watts'].append(output_power)
+					graph_data['solarwatts'].append(output_power)
 
 					# If we have more than a days worth of graph data, start rotating out the old data
 					if len(graph_data) > 1440:
 						graph_data['time'].pop(0)
-						graph_data['cabinload'].pop(0)
-						graph_data['voltage'].pop(0)
-						graph_data['watts'].pop(0)
+						graph_data['battload'].pop(0)
+						graph_data['battvoltage'].pop(0)
+						graph_data['battwatts'].pop(0)
+						graph_data['solarwatts'].pop(0)
 					modbus_client.close()
 			except Exception as e:
 				print("Failed to connect to tristar modbus")
@@ -220,14 +235,14 @@ def update_graph_live(n, n_clicks):
 			print('Failed to communicate to arduino: ' + resp.status_code)
 	else:
 		# The next graph button was pressed, so just update the selected graph and redraw
-		current_graph = (current_graph + 1) % 3
+		current_graph = (current_graph + 1) % 5
 
 	return create_graph()
 
 
 def main():
 	global graph_data
-	graph_data = {'cabinload': [], 'time': [], 'voltage': [], 'watts': []}
+	graph_data = {'battload': [], 'time': [], 'battvoltage': [], 'battwatts': [], 'solarwatts': []}
 	app.run_server(debug=True, host='0.0.0.0')
 
 
