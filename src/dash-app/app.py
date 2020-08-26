@@ -222,6 +222,10 @@ def update_graph_live(n, n_clicks, n2_clicks):
 					graph_data['battvoltage'].append(battery_voltage)
 					graph_data['battwatts'].append(battery_voltage * resp_dict['A0'])
 					target_regulation_voltage = float(rr.registers[51]) * voltage_scaling_factor * 2 ** (-15)
+					# At night this value plummets to zero and screws up the graph, so let's follow the voltage
+					# for night time mode
+					if target_regulation_voltage == 0:
+						target_regulation_voltage = battery_voltage
 					graph_data['targetbattvoltage'].append(target_regulation_voltage)
 					output_power = float(rr.registers[58]) * voltage_scaling_factor * amperage_scaling_factor * 2 ** (
 						-17)
@@ -256,7 +260,7 @@ def update_graph_live(n, n_clicks, n2_clicks):
 def main():
 	global graph_data
 	graph_data = {'battload': [], 'time': [], 'battvoltage': [], 'battwatts': [], 'solarwatts': [], 'targetbattvoltage': []}
-	app.run_server(debug=True, host='0.0.0.0')
+	app.run_server(debug=False, host='0.0.0.0')
 
 
 if __name__ == '__main__':
