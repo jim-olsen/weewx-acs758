@@ -230,3 +230,39 @@ class AddTristarData(StdService):
 		except Exception as e:
 			syslog.syslog(syslog.LOG_ERR, "Error processing record from tristar: " + str(e))
 			client.close()
+
+
+#
+# The data service implementation class itself.  Adds charge controller parameters to the weather record (archive)
+# at the time it is received from weewx.  These will be persisted by weewx to the database for later consumption
+#
+class AddLightningData(StdService):
+	def __init__(self, engine, config_dict):
+		# Initialize Superclass
+		super(AddLightningData, self).__init__(engine, config_dict)
+
+		self.lightning_data = []
+		# Grab the configuration parameters for communication with the charge controller
+		try:
+			syslog.syslog(syslog.LOG_INFO, "Lightning detector configured and initialized")
+		except KeyError as e:
+			syslog.syslog(syslog.LOG_ERR, "Lightning detector failed to configure")
+
+	#
+	# new_archive_packet()
+	#   Called by weewx when a new archive packet is received.  Talk to the charge controller and grab the current
+	# values from modbus and append to the current archive packet.
+	#
+	def new_archive_packet(self, event):
+		if len(self.lightning_data) > 0:
+			syslog(syslog.LOG_INFO, "Lightning strikes detected, processing info")
+			event.record['lightning_strikes'] = 0
+		else:
+			event.record['lightning_total_strikes'] = 0
+			event.record['lightning_avg_distance'] = 0
+			event.record['lightning_median_distance'] = 0
+			event.record['lightning_max_distance'] = 0
+			event.record['lightning_avg_intensity'] = 0
+			event.record['lightning_median_intensity'] = 0
+			event.record['lightning_max_intensity'] = 0
+

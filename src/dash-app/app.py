@@ -3,9 +3,12 @@ import dash
 import dash_core_components as dcc
 import dash_html_components as html
 import plotly
+import pickle
 import requests
+import os
 from pymodbus.client.sync import ModbusTcpClient
 from dash.dependencies import Input, Output
+from os import path
 
 current_graph = 0
 graph_data = {}
@@ -37,7 +40,7 @@ graphStyle = {
 	'font': {
 		'color': '#fca503'
 	},
-	'height': 280
+	'height': 270
 }
 
 # Initialize the dash app and the main html page
@@ -51,10 +54,10 @@ app.layout = html.Div(
 				html.Div(id='live-update-text'),
 				html.Div(id='live-update-button'),
 				dcc.Graph(id='live-update-graph'),
-				html.Div(children=[html.Button('<<< Previous Graph', id='prev-graph', n_clicks=0, style={'height': '60px', 'width': '240px'}),
+				html.Div(children=[html.Button('<<< Previous Graph', id='prev-graph', n_clicks=0, style={'height': '60px', 'width': '180px'}),
 							html.Div(children=[
-								html.A(html.Button('Refresh', style={'height': '60px', 'width': '120px'}), href='/'),
-								html.Button('Next Graph >>>', id='next-graph', n_clicks=0, style={'height': '60px', 'width': '240px'})])],
+								html.A(html.Button('Refresh', style={'height': '60px', 'width': '80px'}), href='/'),
+								html.Button('Next Graph >>>', id='next-graph', n_clicks=0, style={'height': '60px', 'width': '180px'})])],
 							style={'display': 'flex', 'justify-content': 'space-between'}),
 				dcc.Interval(
 					id='text-interval-component',
@@ -244,6 +247,10 @@ def update_graph_live(n, n_clicks, n2_clicks):
 						graph_data['solarwatts'].pop(0)
 						graph_data['targetbattvoltage'].pop(0)
 					modbus_client.close()
+
+					# persist the latest into a file to handle restarts
+					with open('monitor_data.pkl', 'wb') as f:
+						pickle.dump(graph_data, f)
 			except Exception as e:
 				print("Failed to connect to tristar modbus")
 				modbus_client.close()
@@ -263,7 +270,11 @@ def update_graph_live(n, n_clicks, n2_clicks):
 
 def main():
 	global graph_data
-	graph_data = {'battload': [], 'time': [], 'battvoltage': [], 'battwatts': [], 'solarwatts': [], 'targetbattvoltage': []}
+	if path.exists('monitor_data.pkl'):
+		with open('monitor_data.pkl', 'rb') as f:
+			graph_data = pickle.loads(f.read())
+	else:
+		graph_data = {'battload': [], 'time': [], 'battvoltage': [], 'battwatts': [], 'solarwatts': [], 'targetbattvoltage': []}
 	app.run_server(debug=False, host='0.0.0.0')
 
 
