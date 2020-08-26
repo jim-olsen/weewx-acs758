@@ -1,6 +1,6 @@
-# weewx-acs758
+# Dash app and Weewx for Off Grid Sensors
 
-### Dash App Installation Instructions
+## Dash App Installation Instructions
 
 In order to run the dash app, you must have python installed on your raspberry pi,
 or other runtime environment.  Additionally, you must install two additional libraries:
@@ -36,13 +36,15 @@ with the content:
 @lxterminal -e ~/run_monitor.sh
 ```
 
-### Weewx Custom Data Services Installation Instructions
+## Weewx Custom Data Services Installation Instructions
 
 This is an implementation for adding tristar charge controller records, ACS758 current readings from an arduino,
 plus lightning sensor data from the 
 to the standard weather record.  It polls the modbus interface of the
 tristar controller and pulls the major records and adds them onto
-the standard archive weather record as additional fields.
+the standard archive weather record as additional fields.  It will also poll the arduino specified for
+current data from the ACS758.  Finally, it also gathers information from the attached lightning sensor
+for lightning strike data
 
 I have also included an implementation of a bootstrap skin modified to
 have energy data associated with the weather data.  This ends up providing
@@ -54,15 +56,15 @@ extended to have graphs and controls related to solar energy charging.
 
 ![screenshot image](https://github.com/jim-olsen/weewx_tristar/blob/master/screenshot.png "Screenshot of Daily Energy Scree")
 
-## Installation Instructions
-First, you will need to copy the TristarModbusService.py to the user
+### Weewx Configuration and Installation Instructions
+First, you will need to copy the CustomDataServices.py to the user
 directory in the standard weewx install location.  This will add the
 code necessary to communicate with the tristar.
 
 Additionally, you will need to make several configuration changes in
 the weewx.conf file.
 
-First, add a new section to configure the Tristar connection:
+First, add a new section to configure the Tristar and ACS758 connections:
 
 ```
 [Tristar]
@@ -74,6 +76,16 @@ First, add a new section to configure the Tristar connection:
 
         # The modbus port to connect to
         port = 502
+
+[ACS758]
+        # This section is for configuring an Arduino connected to the ACS758
+        # current detectors to sense current
+        
+        # The address of the arduino
+        address = <arduino's ip address>
+
+        # The port number the arduino is listening on
+        port = 80
 
 ```
 
@@ -95,11 +107,11 @@ schema line below to match:
         manager = weewx.wxmanager.WXDaySummaryManager
         # The schema defines the structure of the database.
         # It is *only* used when the database is created.
-        schema = user.TristarModbusService.schema_with_tristar
+        schema = user.CustomDataServices.schema_with_custom_data
 ```
 
 Finally, update the Engine section to add our service upon load.  Note the
-addition of the user.TristarModbusService.AddTristarData service to the
+addition of the user.CustomDataServices.AddTristarData, user.CustomDataServices.AddACS758Data services to the
 data_services.
 
 ```
@@ -112,7 +124,7 @@ data_services.
         # grouped by type, and the order of services within each group
         # determines the order in which the services will be run.
         prep_services = weewx.engine.StdTimeSynch
-        data_services = user.TristarModbusService.AddTristarData
+        data_services = user.CustomDataServices.AddTristarData, user.CustomDataServices.AddACS758Data
         process_services = weewx.engine.StdConvert, weewx.engine.StdCalibrate, weewx.engine.StdQC, weewx.wxservices.StdWXCalculate
         archive_services = weewx.engine.StdArchive
         restful_services = weewx.restx.StdStationRegistry, weewx.restx.StdWunderground, weewx.restx.StdPWSweather, weewx.restx.StdCWOP, weewx.restx.StdWOW, weewx.restx.StdAWEKAS
@@ -157,3 +169,5 @@ After you perform this, these new columns will be available:
 | seconds_in_absorption_daily     | The time spent in the absorption cycle state since night   | secs  |
 | seconds_in_float_daily          | The time spent in the float cycle state since night        | secs  |
 | seconds_in_equalize_daily       | The time spent in the equalize state since night           | secs  |
+| battery_amp_draw                | The draw on the battery bank.  Can be negative             | Amps  |
+| load                            | The current system load                                    | Amps  |
