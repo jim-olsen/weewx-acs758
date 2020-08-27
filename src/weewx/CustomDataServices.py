@@ -1,41 +1,52 @@
 import syslog
 import weewx
 import requests
-from weewx.engine import StdService
-import schemas
-
-schemas.wview
+import RPi.GPIO as GPIO
+import schemas.wview
 import weewx.units
-from pymodbus.client.sync import ModbusTcpClient
+import time
+import statistics
 
-schema_with_amp_data = [{'battery_amp_draw', 'REAL'},
-						{'load', 'REAL'}]
+from pymodbus.client.sync import ModbusTcpClient
+from weewx.engine import StdService
+from DFRobot_AS3935_Lib import DFRobot_AS3935
+
+amp_data_schema = [{'battery_amp_draw', 'REAL'},
+				   {'load', 'REAL'}]
 
 weewx.units.obs_group_dict['battery_amp_draw'] = 'group_amp'
 weewx.units.obs_group_dict['load'] = 'group_amp'
 
 # Define our additional supported columns and their types
 
-schema_with_tristar = [('battery_voltage', 'REAL'),
-						('battery_sense_voltage', 'REAL'),
-						('battery_voltage_slow', 'REAL'),
-						('battery_daily_minimum_voltage', 'REAL'),
-						('battery_daily_maximum_voltage', 'REAL'),
-						('target_regulation_voltage', 'REAL'),
-						('array_voltage', 'REAL'),
-						('array_charge_current', 'REAL'),
-						('battery_charge_current', 'REAL'),
-						('battery_charge_current_slow', 'REAL'),
-						('input_power', 'REAL'),
-						('output_power', 'REAL'),
-						('heatsink_temperature', 'REAL'),
-						('battery_temperature', 'REAL'),
-						('charge_state', 'REAL'),
-						('seconds_in_absorption_daily', 'REAL'),
-						('seconds_in_float_daily', 'REAL'),
-						('seconds_in_equalize_daily', 'REAL')]
+tristar_schema = [('battery_voltage', 'REAL'),
+				  ('battery_sense_voltage', 'REAL'),
+				  ('battery_voltage_slow', 'REAL'),
+				  ('battery_daily_minimum_voltage', 'REAL'),
+				  ('battery_daily_maximum_voltage', 'REAL'),
+				  ('target_regulation_voltage', 'REAL'),
+				  ('array_voltage', 'REAL'),
+				  ('array_charge_current', 'REAL'),
+				  ('battery_charge_current', 'REAL'),
+				  ('battery_charge_current_slow', 'REAL'),
+				  ('input_power', 'REAL'),
+				  ('output_power', 'REAL'),
+				  ('heatsink_temperature', 'REAL'),
+				  ('battery_temperature', 'REAL'),
+				  ('charge_state', 'REAL'),
+				  ('seconds_in_absorption_daily', 'REAL'),
+				  ('seconds_in_float_daily', 'REAL'),
+				  ('seconds_in_equalize_daily', 'REAL')]
 
-schema_with_custom_data = schemas.wview.schema + schema_with_tristar + schema_with_amp_data
+lightning_schema = [('lightning_total_strikes', 'REAL'),
+					('lightning_avg_distance', 'REAL'),
+					('lightning_median_distance', 'REAL'),
+					('lightning_max_distance', 'REAL'),
+					('lightning_avg_intensity', 'REAL'),
+					('lightning_median_intensity', 'REAL'),
+					('lightning_max_intensity', 'REAL')]
+
+schema_with_custom_data = schemas.wview.schema + tristar_schema + amp_data_schema + lightning_schema
 
 # Define the schema column types for weewx types
 
@@ -80,7 +91,7 @@ class AddACS758Data(StdService):
 			# Bind to any new archive record events:
 			self.bind(weewx.NEW_ARCHIVE_RECORD, self.new_archive_packet)
 			syslog.syslog(syslog.LOG_INFO, "ACS758 configured for address %(address)s port %(port)d" %
-							{"address": self.arduino_address, "port": self.arduino_port})
+						  {"address": self.arduino_address, "port": self.arduino_port})
 		except KeyError as e:
 			syslog.syslog(syslog.LOG_ERR, "Tristar failed to configure")
 
@@ -233,7 +244,7 @@ class AddTristarData(StdService):
 
 
 #
-# The data service implementation class itself.  Adds charge controller parameters to the weather record (archive)
+# The data service implementation class itself.  Adds lightning sensor parameters to the weather record (archive)
 # at the time it is received from weewx.  These will be persisted by weewx to the database for later consumption
 #
 class AddLightningData(StdService):
@@ -244,9 +255,51 @@ class AddLightningData(StdService):
 		self.lightning_data = []
 		# Grab the configuration parameters for communication with the charge controller
 		try:
-			syslog.syslog(syslog.LOG_INFO, "Lightning detector configured and initialized")
+			GPIO.setmode(GPIO.BOARD)
+			self.sensor = DFRobot_AS3935(0x03, bus=1)
+			if self.sensor.reset():
+				syslog.syslog(syslog.LOG_INFO, "init lightning sensor success.")
+				# Configure sensor
+				self.sensor.powerUp()
+				# set indoors or outdoors models
+				self.sensor.setIndoors()
+				# sensor.setOutdoors()
+				# disturber detection
+				self.sensor.disturberEn()
+				# sensor.disturberDis()
+				self.sensor.setIrqOutputSource(0)
+				time.sleep(0.5)
+				# set capacitance
+				self.sensor.setTuningCaps(96)
+				# Set the noise level,use a default value greater than 7
+				self.sensor.setNoiseFloorLv1(2)
+				# used to modify WDTH,values should only be between 0x00 and 0x0F (0 and 7)
+				self.sensor.setWatchdogThreshold(2)
+				# used to modify SREJ (spike rejection),values should only be between 0x00 and 0x0F (0 and 7)
+				self.sensor.setSpikeRejection(2)
+
+				GPIO.setup(7, GPIO.IN)
+				GPIO.add_event_detect(7, GPIO.RISING, callback=self.gpio_callback)
+			else:
+				syslog.syslog(syslog.LOG_ERR, "init lightning sensor fail")
 		except KeyError as e:
 			syslog.syslog(syslog.LOG_ERR, "Lightning detector failed to configure")
+
+	def gpio_callback(self, channel):
+		syslog.syslog(syslog.LOG_INFO, "Received Lightning Interrupt")
+		time.sleep(0.005)
+		intSrc = self.sensor.getInterruptSrc()
+		if intSrc == 1:
+			syslog.syslog(syslog.LOG_INFO, "Lightning Detected")
+			# Add in the new record to the list of records
+			self.lightning_data.append({
+				'strike_distance': self.sensor.getLightningDistKm(),
+				'strike_intensity': self.sensor.getStrikeEnergyRaw()
+			})
+		elif intSrc == 3:
+			syslog.syslog(syslog.LOG_ERR, "Lightning Detector Noise Level Too High")
+		else:
+			pass
 
 	#
 	# new_archive_packet()
@@ -256,7 +309,19 @@ class AddLightningData(StdService):
 	def new_archive_packet(self, event):
 		if len(self.lightning_data) > 0:
 			syslog(syslog.LOG_INFO, "Lightning strikes detected, processing info")
-			event.record['lightning_strikes'] = 0
+			event.record['lightning_total_strikes'] = len(self.lightning_data)
+			distances = []
+			intensities = []
+			for rec in self.lightning_data:
+				distances.append(rec['strike_distance'])
+				intensities.append(rec['strike_intensity'])
+			event.record['lightning_avg_distance'] = statistics.mean(distances)
+			event.record['lightning_median_distance'] = statistics.median(distances)
+			event.record['lightning_max_distance'] = max(distances)
+			event.record['lightning_min_distance'] = min(distances)
+			event.record['lightning_avg_intensity'] = statistics.mean(intensities)
+			event.record['lightning_median_intensity'] = statistics.median(intensities)
+			event.record['lightning_max_intensity'] = max(intensities)
 		else:
 			event.record['lightning_total_strikes'] = 0
 			event.record['lightning_avg_distance'] = 0

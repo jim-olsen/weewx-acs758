@@ -271,8 +271,11 @@ def update_graph_live(n, n_clicks, n2_clicks):
 def main():
 	global graph_data
 	if path.exists('monitor_data.pkl'):
-		with open('monitor_data.pkl', 'rb') as f:
-			graph_data = pickle.loads(f.read())
+		try:
+			with open('monitor_data.pkl', 'rb') as f:
+				graph_data = pickle.loads(f.read())
+		except Exception as e:
+			graph_data = {'battload': [], 'time': [], 'battvoltage': [], 'battwatts': [], 'solarwatts': [], 'targetbattvoltage': []}
 	else:
 		graph_data = {'battload': [], 'time': [], 'battvoltage': [], 'battwatts': [], 'solarwatts': [], 'targetbattvoltage': []}
 	app.run_server(debug=False, host='0.0.0.0')
