@@ -213,49 +213,51 @@ def update_graph_live(n, n_clicks, n2_clicks):
 			resp_dict = resp.json()
 			graph_data['time'].append(datetime.datetime.now())
 			graph_data['battload'].append(resp_dict['A0'])
-			# Connect directly to the modbus interface on the tristar charge controller to get the current information about
-			# the state of the solar array and battery charging
-			modbus_client = ModbusTcpClient(tristar_addr, port=502)
-			try:
-				modbus_client.connect()
-				rr = modbus_client.read_holding_registers(0, 91, unit=1)
-				if rr is None:
-					modbus_client.close()
-					print("Failed to connect and read from tristar modbus")
-				else:
-					voltage_scaling_factor = (float(rr.registers[0]) + (float(rr.registers[1]) / 100))
-					amperage_scaling_factor = (float(rr.registers[2]) + (float(rr.registers[3]) / 100))
-					battery_voltage = float(rr.registers[24]) * voltage_scaling_factor * 2 ** (-15)
-					graph_data['battvoltage'].append(battery_voltage)
-					graph_data['battwatts'].append(battery_voltage * resp_dict['A0'])
-					target_regulation_voltage = float(rr.registers[51]) * voltage_scaling_factor * 2 ** (-15)
-					# At night this value plummets to zero and screws up the graph, so let's follow the voltage
-					# for night time mode
-					if target_regulation_voltage == 0:
-						target_regulation_voltage = battery_voltage
-					graph_data['targetbattvoltage'].append(target_regulation_voltage)
-					output_power = float(rr.registers[58]) * voltage_scaling_factor * amperage_scaling_factor * 2 ** (
-						-17)
-					graph_data['solarwatts'].append(output_power)
-
-					# If we have more than a days worth of graph data, start rotating out the old data
-					if len(graph_data['time']) > 2880:
-						graph_data['time'].pop(0)
-						graph_data['battload'].pop(0)
-						graph_data['battvoltage'].pop(0)
-						graph_data['battwatts'].pop(0)
-						graph_data['solarwatts'].pop(0)
-						graph_data['targetbattvoltage'].pop(0)
-					modbus_client.close()
-
-					# persist the latest into a file to handle restarts
-					with open('monitor_data.pkl', 'wb') as f:
-						pickle.dump(graph_data, f)
-			except Exception as e:
-				print("Failed to connect to tristar modbus")
-				modbus_client.close()
 		else:
 			print('Failed to communicate to arduino: ' + str(resp.status_code))
+
+		# Connect directly to the modbus interface on the tristar charge controller to get the current information about
+		# the state of the solar array and battery charging
+		modbus_client = ModbusTcpClient(tristar_addr, port=502)
+		try:
+			modbus_client.connect()
+			rr = modbus_client.read_holding_registers(0, 91, unit=1)
+			if rr is None:
+				modbus_client.close()
+				print("Failed to connect and read from tristar modbus")
+			else:
+				voltage_scaling_factor = (float(rr.registers[0]) + (float(rr.registers[1]) / 100))
+				amperage_scaling_factor = (float(rr.registers[2]) + (float(rr.registers[3]) / 100))
+				battery_voltage = float(rr.registers[24]) * voltage_scaling_factor * 2 ** (-15)
+				graph_data['battvoltage'].append(battery_voltage)
+				graph_data['battwatts'].append(battery_voltage * resp_dict['A0'])
+				target_regulation_voltage = float(rr.registers[51]) * voltage_scaling_factor * 2 ** (-15)
+				# At night this value plummets to zero and screws up the graph, so let's follow the voltage
+				# for night time mode
+				if target_regulation_voltage == 0:
+					target_regulation_voltage = battery_voltage
+				graph_data['targetbattvoltage'].append(target_regulation_voltage)
+				output_power = float(rr.registers[58]) * voltage_scaling_factor * amperage_scaling_factor * 2 ** (
+					-17)
+				graph_data['solarwatts'].append(output_power)
+
+				# If we have more than a days worth of graph data, start rotating out the old data
+				while len(graph_data['time']) > 2880:
+					graph_data['time'].pop(0)
+					graph_data['battload'].pop(0)
+					graph_data['battvoltage'].pop(0)
+					graph_data['battwatts'].pop(0)
+					graph_data['solarwatts'].pop(0)
+					graph_data['targetbattvoltage'].pop(0)
+
+				modbus_client.close()
+
+				# persist the latest into a file to handle restarts
+				with open('monitor_data.pkl', 'wb') as f:
+					pickle.dump(graph_data, f)
+		except Exception as e:
+			print("Failed to connect to tristar modbus")
+			modbus_client.close()
 	elif dash.callback_context.triggered[0]['prop_id'].split('.')[0] == 'next-graph':
 		# The next graph button was pressed, so just update the selected graph and redraw
 		current_graph = (current_graph + 1) % 5
