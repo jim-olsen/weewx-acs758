@@ -239,7 +239,7 @@ def update_graph_live(n, n_clicks, n2_clicks):
 					graph_data['solarwatts'].append(output_power)
 
 					# If we have more than a days worth of graph data, start rotating out the old data
-					if len(graph_data) > 1440:
+					if len(graph_data['time']) > 2880:
 						graph_data['time'].pop(0)
 						graph_data['battload'].pop(0)
 						graph_data['battvoltage'].pop(0)
