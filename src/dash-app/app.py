@@ -91,7 +91,7 @@ def update_text_metrics(n):
 		resp_dict = resp.json()
 		current_load = '{0:.2f} A'.format(resp_dict['A0'])
 		table_elements.append(html.Td(style=td_style, children=current_load))
-		header_row.append(html.Th(style=td_style, children='Battery Load'))
+		header_row.append(html.Th(style=td_style, children='Batt (A)'))
 	else:
 		print('Failed to communicate to arduino: ' + str(resp.status_code))
 		resp_dict['A0'] = 0
@@ -112,10 +112,10 @@ def update_text_metrics(n):
 			# Voltage Related Statistics
 			battery_voltage = float(rr.registers[24]) * voltage_scaling_factor * 2 ** (-15)
 			table_elements.append(html.Td(style=td_style, children='{0:.2f} V'.format(battery_voltage)))
-			header_row.append(html.Th(style=td_style, children='Batt Voltage'))
+			header_row.append(html.Th(style=td_style, children='Batt (V)'))
 			table_elements.append(
 				html.Td(style=td_style, children='{0:0.0f} W'.format(battery_voltage * resp_dict['A0'])))
-			header_row.append(html.Th(style=td_style, children='Batt Watts'))
+			header_row.append(html.Th(style=td_style, children='Batt (W)'))
 			battery_sense_voltage = float(rr.registers[26]) * voltage_scaling_factor * 2 ** (-15)
 			battery_voltage_slow = float(rr.registers[38]) * voltage_scaling_factor * 2 ** (-15)
 			battery_daily_minimum_voltage = float(rr.registers[64]) * voltage_scaling_factor * 2 ** (-15)
@@ -130,7 +130,7 @@ def update_text_metrics(n):
 			input_power = float(rr.registers[59]) * voltage_scaling_factor * amperage_scaling_factor * 2 ** (-17)
 			output_power = float(rr.registers[58]) * voltage_scaling_factor * amperage_scaling_factor * 2 ** (-17)
 			table_elements.append(html.Td(style=td_style, children='{0:0.0f} W'.format(output_power)))
-			header_row.append(html.Th(style=td_style, children='Solar Watts'))
+			header_row.append(html.Th(style=td_style, children='Solar (W)'))
 			# Temperature Statistics
 			heatsink_temperature = rr.registers[35]
 			battery_temperature = rr.registers[36]
@@ -138,7 +138,7 @@ def update_text_metrics(n):
 			charge_states = ["START", "NIGHT_CHECK", "DISCONNECT", "NIGHT", "FAULT", "MPPT", "ABSORPTION", "FLOAT", "EQUALIZE", "SLAVE"]
 			charge_state = charge_states[rr.registers[50]]
 			table_elements.append(html.Td(style=td_style, children=charge_state))
-			header_row.append(html.Th(style=td_style, children='Charge State'))
+			header_row.append(html.Th(style=td_style, children='Mode'))
 			seconds_in_absorption_daily = rr.registers[77]
 			seconds_in_float_daily = rr.registers[79]
 			seconds_in_equalization_daily = rr.registers[78]
@@ -162,35 +162,35 @@ def create_graph():
 	fig['layout']['legend'] = {'x': 0, 'y': 1, 'xanchor': 'right'}
 	if current_graph == 0:
 		fig.append_trace(
-			{'x': graph_data['time'], 'y': graph_data['battload'], 'name': 'Batt Load', 'mode': 'lines',
+			{'x': graph_data['time'], 'y': graph_data['battload'], 'name': 'Load (A)', 'mode': 'lines',
 				'type': 'scatter', 'marker': {'color': '#fca503'}, 'line_shape': 'spline'}, 1, 1)
-		fig['layout']['title'] = {'text': 'Batt Load', 'xanchor': 'center', 'yanchor': 'bottom', 'x': 0.5, 'y': 0, 'font': {	'color': '#fca503', 'size': 40}}
+		fig['layout']['title'] = {'text': 'Batt (A)', 'xanchor': 'center', 'yanchor': 'bottom', 'x': 0.5, 'y': 0, 'font': {	'color': '#fca503', 'size': 40}}
 	if current_graph == 1:
 		fig.append_trace(
-			{'x': graph_data['time'], 'y': graph_data['battvoltage'], 'name': 'Batt Voltage', 'mode': 'lines',
+			{'x': graph_data['time'], 'y': graph_data['battvoltage'], 'name': 'Batt (V)', 'mode': 'lines',
 				'type': 'scatter', 'marker': {'color': '#fca503'}, 'line_shape': 'spline'}, 1, 1)
 		fig.append_trace(
-			{'x': graph_data['time'], 'y': graph_data['targetbattvoltage'], 'name': 'Target Batt Voltage', 'mode': 'lines',
+			{'x': graph_data['time'], 'y': graph_data['targetbattvoltage'], 'name': 'Target (V)', 'mode': 'lines',
 			 'type': 'scatter', 'marker': {'color': '#26f0ec'}, 'line_shape': 'spline'}, 1, 1)
-		fig['layout']['title'] = {'text': 'Batt Voltage', 'xanchor': 'center', 'yanchor': 'bottom', 'x': 0.5, 'y': 0, 'font': {	'color': '#fca503', 'size': 40}}
+		fig['layout']['title'] = {'text': 'Batt (V)', 'xanchor': 'center', 'yanchor': 'bottom', 'x': 0.5, 'y': 0, 'font': {	'color': '#fca503', 'size': 40}}
 	if current_graph == 2:
 		fig.append_trace(
-			{'x': graph_data['time'], 'y': graph_data['battwatts'], 'name': 'Batt Watts', 'mode': 'lines',
+			{'x': graph_data['time'], 'y': graph_data['battwatts'], 'name': 'Batt (W)', 'mode': 'lines',
 				'type': 'scatter', 'marker': {'color': '#fca503'}, 'line_shape': 'spline'}, 1, 1)
-		fig['layout']['title'] = {'text': 'Batt Watts', 'xanchor': 'center', 'yanchor': 'bottom', 'x': 0.5, 'y': 0, 'font': {	'color': '#fca503', 'size': 40}}
+		fig['layout']['title'] = {'text': 'Batt (W)', 'xanchor': 'center', 'yanchor': 'bottom', 'x': 0.5, 'y': 0, 'font': {	'color': '#fca503', 'size': 40}}
 	if current_graph == 3:
 		fig.append_trace(
-			{'x': graph_data['time'], 'y': graph_data['solarwatts'], 'name': 'Solar Watts', 'mode': 'lines',
+			{'x': graph_data['time'], 'y': graph_data['solarwatts'], 'name': 'Solar (W)', 'mode': 'lines',
 			 'type': 'scatter', 'marker': {'color': '#fca503'}, 'line_shape': 'spline'}, 1, 1)
-		fig['layout']['title'] = {'text': 'Solar Watts', 'xanchor': 'center', 'yanchor': 'bottom', 'x': 0.5, 'y': 0, 'font': {	'color': '#fca503', 'size': 40}}
+		fig['layout']['title'] = {'text': 'Solar (W)', 'xanchor': 'center', 'yanchor': 'bottom', 'x': 0.5, 'y': 0, 'font': {	'color': '#fca503', 'size': 40}}
 	if current_graph == 4:
 		fig.append_trace(
-			{'x': graph_data['time'], 'y': graph_data['battwatts'], 'name': 'Batt Watts', 'mode': 'lines',
+			{'x': graph_data['time'], 'y': graph_data['battwatts'], 'name': 'Batt (W)', 'mode': 'lines',
 			 'type': 'scatter', 'marker': {'color': '#eb1717'}, 'line_shape': 'spline'}, 1, 1)
 		fig.append_trace(
-			{'x': graph_data['time'], 'y': graph_data['solarwatts'], 'name': 'Solar Watts', 'mode': 'lines',
+			{'x': graph_data['time'], 'y': graph_data['solarwatts'], 'name': 'Solar (W)', 'mode': 'lines',
 			 'type': 'scatter', 'marker': {'color': '#fbff19'}, 'line_shape': 'spline'}, 1, 1)
-		fig['layout']['title'] = {'text': 'Batt and Solar Watts', 'xanchor': 'center', 'yanchor': 'bottom', 'x': 0.5, 'y': 0, 'font': {	'color': '#fca503', 'size': 40}}
+		fig['layout']['title'] = {'text': 'Batt and Solar (W)', 'xanchor': 'center', 'yanchor': 'bottom', 'x': 0.5, 'y': 0, 'font': {	'color': '#fca503', 'size': 40}}
 
 	return fig
 
