@@ -75,26 +75,46 @@ app.layout = html.Div(
 
 #
 # Fetch the data from both the tristar charge controller and the arduino running the current sensor and update
-# the text elements displaying the live dta point
+# the text elements displaying the live data point
 #
 @app.callback(Output('live-update-text', 'children'), [Input('text-interval-component', 'n_intervals')])
 def update_text_metrics(n):
 	table_elements = []
 	header_row = []
 	td_style = {'border': '1px solid #fca503', 'text-align': 'center', 'font-size': '30px', 'font-family': 'cursive'}
+	battery_load = 0;
+	load_amps = 0;
+	battery_voltage = 0;
+	solar_watts = 0;
+	charge_state = 'UNK'
+
 
 	# Make a rest call to the arduino to fetch the current amperage value on the battery sensor
-	resp = requests.get(arduino_addr + '/A0')
-	current_load = 'N/A'
-	resp_dict = {}
-	if resp.status_code == 200:
-		resp_dict = resp.json()
-		current_load = '{0:.2f} A'.format(resp_dict['A0'])
-		table_elements.append(html.Td(style=td_style, children=current_load))
-		header_row.append(html.Th(style=td_style, children='Batt (A)'))
-	else:
-		print('Failed to communicate to arduino: ' + str(resp.status_code))
-		resp_dict['A0'] = 0
+	try:
+		resp = requests.get(arduino_addr + '/A0')
+		current_load = 'N/A'
+		resp_dict = {}
+		if resp.status_code == 200:
+			resp_dict = resp.json()
+			battery_load = resp_dict['A0'];
+		else:
+			print('Failed to communicate to arduino: ' + str(resp.status_code))
+			resp_dict['A0'] = 0
+	except Exception as e:
+		print('Failed to communicate to arduino: ' + str(e))
+
+	try:
+		resp = requests.get(arduino_addr + '/A1')
+		current_load = 'N/A'
+		resp_dict = {}
+		if resp.status_code == 200:
+			resp_dict = resp.json()
+			load_amps = resp_dict['A1']
+		else:
+			print('Failed to communicate to arduino: ' + str(resp.status_code))
+			resp_dict['A0'] = 0
+	except Exception as e:
+		print('Failed to communicate to arduino: ' + str(e))
 
 	# Connect directly to the modbus interface on the tristar charge controller to get the current information about
 	# the state of the solar array and battery charging
@@ -111,11 +131,6 @@ def update_text_metrics(n):
 
 			# Voltage Related Statistics
 			battery_voltage = float(rr.registers[24]) * voltage_scaling_factor * 2 ** (-15)
-			table_elements.append(html.Td(style=td_style, children='{0:.2f} V'.format(battery_voltage)))
-			header_row.append(html.Th(style=td_style, children='Batt (V)'))
-			table_elements.append(
-				html.Td(style=td_style, children='{0:0.0f} W'.format(battery_voltage * resp_dict['A0'])))
-			header_row.append(html.Th(style=td_style, children='Batt (W)'))
 			battery_sense_voltage = float(rr.registers[26]) * voltage_scaling_factor * 2 ** (-15)
 			battery_voltage_slow = float(rr.registers[38]) * voltage_scaling_factor * 2 ** (-15)
 			battery_daily_minimum_voltage = float(rr.registers[64]) * voltage_scaling_factor * 2 ** (-15)
@@ -128,17 +143,13 @@ def update_text_metrics(n):
 			battery_charge_current_slow = float(rr.registers[39]) * amperage_scaling_factor * 2 ** (-15)
 			# Wattage Related Statistics
 			input_power = float(rr.registers[59]) * voltage_scaling_factor * amperage_scaling_factor * 2 ** (-17)
-			output_power = float(rr.registers[58]) * voltage_scaling_factor * amperage_scaling_factor * 2 ** (-17)
-			table_elements.append(html.Td(style=td_style, children='{0:0.0f} W'.format(output_power)))
-			header_row.append(html.Th(style=td_style, children='Solar (W)'))
+			solar_watts = float(rr.registers[58]) * voltage_scaling_factor * amperage_scaling_factor * 2 ** (-17)
 			# Temperature Statistics
 			heatsink_temperature = rr.registers[35]
 			battery_temperature = rr.registers[36]
 			# Misc Statistics
 			charge_states = ["START", "NIGHT_CHECK", "DISCONNECT", "NIGHT", "FAULT", "MPPT", "ABSORPTION", "FLOAT", "EQUALIZE", "SLAVE"]
 			charge_state = charge_states[rr.registers[50]]
-			table_elements.append(html.Td(style=td_style, children=charge_state))
-			header_row.append(html.Th(style=td_style, children='Mode'))
 			seconds_in_absorption_daily = rr.registers[77]
 			seconds_in_float_daily = rr.registers[79]
 			seconds_in_equalization_daily = rr.registers[78]
@@ -147,6 +158,20 @@ def update_text_metrics(n):
 	except Exception as e:
 		print("Failed to connect to tristar modbus")
 		modbus_client.close()
+
+	# table_elements.append(html.Td(style=td_style, children='{0:.2f} A'.format(battery_load)))
+	# header_row.append(html.Th(style=td_style, children='Batt (A)'))
+	table_elements.append(html.Td(style=td_style, children='{0:.2f}'.format(load_amps * battery_voltage)))
+	header_row.append(html.Th(style=td_style, children='Load (W)'))
+	table_elements.append(html.Td(style=td_style, children='{0:.2f}'.format(battery_voltage)))
+	header_row.append(html.Th(style=td_style, children='Batt (V)'))
+	table_elements.append(
+		html.Td(style=td_style, children='{0:0.0f}'.format(battery_voltage * battery_load)))
+	header_row.append(html.Th(style=td_style, children='Batt (W)'))
+	table_elements.append(html.Td(style=td_style, children='{0:0.0f}'.format(solar_watts)))
+	header_row.append(html.Th(style=td_style, children='Solar (W)'))
+	table_elements.append(html.Td(style=td_style, children=charge_state))
+	header_row.append(html.Th(style=td_style, children='Mode'))
 
 	return html.Table(style={'width': '100%', 'border': '1px solid #fca503'}, children=[html.Tr(header_row), html.Tr(table_elements)])
 
@@ -208,14 +233,16 @@ def update_graph_live(n, n_clicks, n2_clicks):
 
 	# If this is triggered by the interval, update the data
 	if dash.callback_context.triggered[0]['prop_id'].split('.')[0] == 'graph-interval-component':
-		resp = requests.get(arduino_addr + '/A0')
-		if resp.status_code == 200:
-			resp_dict = resp.json()
-			graph_data['time'].append(datetime.datetime.now())
-			graph_data['battload'].append(resp_dict['A0'])
-		else:
-			print('Failed to communicate to arduino: ' + str(resp.status_code))
-
+		try:
+			resp = requests.get(arduino_addr + '/A0')
+			if resp.status_code == 200:
+				resp_dict = resp.json()
+				graph_data['time'].append(datetime.datetime.now())
+				graph_data['battload'].append(resp_dict['A0'])
+			else:
+				print('Failed to communicate to arduino: ' + str(resp.status_code))
+		except Exception as e:
+			print('Failed to connect to arduino: ' + str(e))
 		# Connect directly to the modbus interface on the tristar charge controller to get the current information about
 		# the state of the solar array and battery charging
 		modbus_client = ModbusTcpClient(tristar_addr, port=502)
