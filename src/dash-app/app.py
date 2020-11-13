@@ -5,6 +5,8 @@ import dash_html_components as html
 import plotly
 import pickle
 import requests
+import time
+import threading
 import os
 from pymodbus.client.sync import ModbusTcpClient
 from dash.dependencies import Input, Output
@@ -12,6 +14,7 @@ from os import path
 
 current_graph = 0
 graph_data = {}
+current_data = {}
 # Set this value to the ip of your tristar charge controller
 tristar_addr = '10.0.10.10'
 # Set this value to the base url of your arduino running the acs758 monitoring
@@ -74,6 +77,86 @@ app.layout = html.Div(
 
 
 #
+# Fetch the data from the arduino and populate our central dictionary of values
+#
+def update_arduino_values():
+	while True:
+		try:
+			resp = requests.get(arduino_addr + '/A0')
+			current_load = 'N/A'
+			resp_dict = {}
+			if resp.status_code == 200:
+				resp_dict = resp.json()
+				current_data["battery_load"] = resp_dict['A0']
+			else:
+				print('Failed to communicate to arduino: ' + str(resp.status_code))
+				current_data["battery_load"] = 0
+		except Exception as e:
+			print('Failed to communicate to arduino: ' + str(e))
+
+		try:
+			resp = requests.get(arduino_addr + '/A1')
+			current_load = 'N/A'
+			resp_dict = {}
+			if resp.status_code == 200:
+				resp_dict = resp.json()
+				current_data["load_amps"] = resp_dict['A1']
+			else:
+				print('Failed to communicate to arduino: ' + str(resp.status_code))
+				current_data["load_amps"] = 0
+		except Exception as e:
+			print('Failed to communicate to arduino: ' + str(e))
+		time.sleep(5)
+
+#
+# Update the values from the tristar modbus protocol in the values dictionary
+#
+def update_tristar_values():
+	while True:
+		# Connect directly to the modbus interface on the tristar charge controller to get the current information about
+		# the state of the solar array and battery charging
+		modbus_client = ModbusTcpClient(tristar_addr, port=502)
+		try:
+			modbus_client.connect()
+			rr = modbus_client.read_holding_registers(0, 91, unit=1)
+			if rr is None:
+				modbus_client.close()
+				print("Failed to connect and read from tristar modbus")
+			else:
+				voltage_scaling_factor = (float(rr.registers[0]) + (float(rr.registers[1]) / 100))
+				amperage_scaling_factor = (float(rr.registers[2]) + (float(rr.registers[3]) / 100))
+
+				# Voltage Related Statistics
+				current_data["battery_voltage"] = float(rr.registers[24]) * voltage_scaling_factor * 2 ** (-15)
+				current_data["battery_sense_voltage"] = float(rr.registers[26]) * voltage_scaling_factor * 2 ** (-15)
+				current_data["battery_voltage_slow"] = float(rr.registers[38]) * voltage_scaling_factor * 2 ** (-15)
+				current_data["battery_daily_minimum_voltage"] = float(rr.registers[64]) * voltage_scaling_factor * 2 ** (-15)
+				current_data["battery_daily_maximum_voltage"] = float(rr.registers[65]) * voltage_scaling_factor * 2 ** (-15)
+				current_data["target_regulation_voltage"] = float(rr.registers[51]) * voltage_scaling_factor * 2 ** (-15)
+				current_data["array_voltage"] = float(rr.registers[27]) * voltage_scaling_factor * 2 ** (-15)
+				# Current Related Statistics
+				current_data["array_charge_current"] = float(rr.registers[29]) * amperage_scaling_factor * 2 ** (-15)
+				current_data["battery_charge_current"] = float(rr.registers[28]) * amperage_scaling_factor * 2 ** (-15)
+				current_data["battery_charge_current_slow"] = float(rr.registers[39]) * amperage_scaling_factor * 2 ** (-15)
+				# Wattage Related Statistics
+				current_data["input_power"] = float(rr.registers[59]) * voltage_scaling_factor * amperage_scaling_factor * 2 ** (-17)
+				current_data["solar_watts"] = float(rr.registers[58]) * voltage_scaling_factor * amperage_scaling_factor * 2 ** (-17)
+				# Temperature Statistics
+				current_data["heatsink_temperature"] = rr.registers[35]
+				current_data["battery_temperature"] = rr.registers[36]
+				# Misc Statistics
+				charge_states = ["START", "NIGHT_CHECK", "DISCONNECT", "NIGHT", "FAULT", "MPPT", "ABSORPTION", "FLOAT", "EQUALIZE", "SLAVE"]
+				current_data["charge_state"] = charge_states[rr.registers[50]]
+				current_data["seconds_in_absorption_daily"] = rr.registers[77]
+				current_data["seconds_in_float_daily"] = rr.registers[79]
+				current_data["seconds_in_equalization_daily"] = rr.registers[78]
+				modbus_client.close()
+		except Exception as e:
+			print("Failed to connect to tristar modbus")
+			modbus_client.close()
+		time.sleep(5)
+
+#
 # Fetch the data from both the tristar charge controller and the arduino running the current sensor and update
 # the text elements displaying the live data point
 #
@@ -82,95 +165,19 @@ def update_text_metrics(n):
 	table_elements = []
 	header_row = []
 	td_style = {'border': '1px solid #fca503', 'text-align': 'center', 'font-size': '30px', 'font-family': 'cursive'}
-	battery_load = 0;
-	load_amps = 0;
-	battery_voltage = 0;
-	solar_watts = 0;
-	charge_state = 'UNK'
-
-
-	# Make a rest call to the arduino to fetch the current amperage value on the battery sensor
-	try:
-		resp = requests.get(arduino_addr + '/A0')
-		current_load = 'N/A'
-		resp_dict = {}
-		if resp.status_code == 200:
-			resp_dict = resp.json()
-			battery_load = resp_dict['A0'];
-		else:
-			print('Failed to communicate to arduino: ' + str(resp.status_code))
-			resp_dict['A0'] = 0
-	except Exception as e:
-		print('Failed to communicate to arduino: ' + str(e))
-
-	try:
-		resp = requests.get(arduino_addr + '/A1')
-		current_load = 'N/A'
-		resp_dict = {}
-		if resp.status_code == 200:
-			resp_dict = resp.json()
-			load_amps = resp_dict['A1']
-		else:
-			print('Failed to communicate to arduino: ' + str(resp.status_code))
-			resp_dict['A0'] = 0
-	except Exception as e:
-		print('Failed to communicate to arduino: ' + str(e))
-
-	# Connect directly to the modbus interface on the tristar charge controller to get the current information about
-	# the state of the solar array and battery charging
-	modbus_client = ModbusTcpClient(tristar_addr, port=502)
-	try:
-		modbus_client.connect()
-		rr = modbus_client.read_holding_registers(0, 91, unit=1)
-		if rr is None:
-			modbus_client.close()
-			print("Failed to connect and read from tristar modbus")
-		else:
-			voltage_scaling_factor = (float(rr.registers[0]) + (float(rr.registers[1]) / 100))
-			amperage_scaling_factor = (float(rr.registers[2]) + (float(rr.registers[3]) / 100))
-
-			# Voltage Related Statistics
-			battery_voltage = float(rr.registers[24]) * voltage_scaling_factor * 2 ** (-15)
-			battery_sense_voltage = float(rr.registers[26]) * voltage_scaling_factor * 2 ** (-15)
-			battery_voltage_slow = float(rr.registers[38]) * voltage_scaling_factor * 2 ** (-15)
-			battery_daily_minimum_voltage = float(rr.registers[64]) * voltage_scaling_factor * 2 ** (-15)
-			battery_daily_maximum_voltage = float(rr.registers[65]) * voltage_scaling_factor * 2 ** (-15)
-			target_regulation_voltage = float(rr.registers[51]) * voltage_scaling_factor * 2 ** (-15)
-			array_voltage = float(rr.registers[27]) * voltage_scaling_factor * 2 ** (-15)
-			# Current Related Statistics
-			array_charge_current = float(rr.registers[29]) * amperage_scaling_factor * 2 ** (-15)
-			battery_charge_current = float(rr.registers[28]) * amperage_scaling_factor * 2 ** (-15)
-			battery_charge_current_slow = float(rr.registers[39]) * amperage_scaling_factor * 2 ** (-15)
-			# Wattage Related Statistics
-			input_power = float(rr.registers[59]) * voltage_scaling_factor * amperage_scaling_factor * 2 ** (-17)
-			solar_watts = float(rr.registers[58]) * voltage_scaling_factor * amperage_scaling_factor * 2 ** (-17)
-			# Temperature Statistics
-			heatsink_temperature = rr.registers[35]
-			battery_temperature = rr.registers[36]
-			# Misc Statistics
-			charge_states = ["START", "NIGHT_CHECK", "DISCONNECT", "NIGHT", "FAULT", "MPPT", "ABSORPTION", "FLOAT", "EQUALIZE", "SLAVE"]
-			charge_state = charge_states[rr.registers[50]]
-			seconds_in_absorption_daily = rr.registers[77]
-			seconds_in_float_daily = rr.registers[79]
-			seconds_in_equalization_daily = rr.registers[78]
-			modbus_client.close()
-
-	except Exception as e:
-		print("Failed to connect to tristar modbus")
-		modbus_client.close()
 
 	# table_elements.append(html.Td(style=td_style, children='{0:.2f} A'.format(battery_load)))
 	# header_row.append(html.Th(style=td_style, children='Batt (A)'))
-	table_elements.append(html.Td(style=td_style, children='{0:.2f}'.format(load_amps * battery_voltage)))
+	table_elements.append(html.Td(style=td_style, children='{0:.2f}'.format(current_data["load_amps"] * current_data["battery_voltage"])))
 	header_row.append(html.Th(style=td_style, children='Load (W)'))
-	table_elements.append(html.Td(style=td_style, children='{0:.2f}'.format(battery_voltage)))
+	table_elements.append(html.Td(style=td_style, children='{0:.2f}'.format(current_data["battery_voltage"])))
 	header_row.append(html.Th(style=td_style, children='Batt (V)'))
 	table_elements.append(
-		html.Td(style=td_style, children='{0:0.0f}'.format(battery_voltage * battery_load)))
+		html.Td(style=td_style, children='{0:0.0f}'.format(current_data["battery_voltage"] * current_data["battery_load"])))
 	header_row.append(html.Th(style=td_style, children='Batt (W)'))
-	table_elements.append(html.Td(style=td_style, children='{0:0.0f}'.format(solar_watts)))
+	table_elements.append(html.Td(style=td_style, children='{0:0.0f}'.format(current_data["solar_watts"])))
 	header_row.append(html.Th(style=td_style, children='Solar (W)'))
-	table_elements.append(html.Td(style=td_style, children=charge_state))
+	table_elements.append(html.Td(style=td_style, children=current_data["charge_state"]))
 	header_row.append(html.Th(style=td_style, children='Mode'))
 
 	return html.Table(style={'width': '100%', 'border': '1px solid #fca503'}, children=[html.Tr(header_row), html.Tr(table_elements)])
@@ -181,6 +188,7 @@ def update_text_metrics(n):
 #
 def create_graph():
 	global current_graph
+
 	fig = plotly.tools.make_subplots(rows=2, cols=1, vertical_spacing=0.2)
 	fig['layout'] = graphStyle
 	fig['layout']['margin'] = {'l': 30, 'r': 10, 'b': 50, 't': 10}
@@ -228,63 +236,33 @@ def create_graph():
 @app.callback(Output('live-update-graph', 'figure'),
 				[Input('graph-interval-component', 'n_intervals'), Input('next-graph', 'n_clicks'), Input('prev-graph', 'n_clicks')])
 def update_graph_live(n, n_clicks, n2_clicks):
-	global current_graph
-	global graph_data
-
-	# If this is triggered by the interval, update the data
 	if dash.callback_context.triggered[0]['prop_id'].split('.')[0] == 'graph-interval-component':
-		try:
-			resp = requests.get(arduino_addr + '/A0')
-			if resp.status_code == 200:
-				resp_dict = resp.json()
-				graph_data['time'].append(datetime.datetime.now())
-				graph_data['battload'].append(resp_dict['A0'])
-			else:
-				print('Failed to communicate to arduino: ' + str(resp.status_code))
-		except Exception as e:
-			print('Failed to connect to arduino: ' + str(e))
-		# Connect directly to the modbus interface on the tristar charge controller to get the current information about
-		# the state of the solar array and battery charging
-		modbus_client = ModbusTcpClient(tristar_addr, port=502)
-		try:
-			modbus_client.connect()
-			rr = modbus_client.read_holding_registers(0, 91, unit=1)
-			if rr is None:
-				modbus_client.close()
-				print("Failed to connect and read from tristar modbus")
-			else:
-				voltage_scaling_factor = (float(rr.registers[0]) + (float(rr.registers[1]) / 100))
-				amperage_scaling_factor = (float(rr.registers[2]) + (float(rr.registers[3]) / 100))
-				battery_voltage = float(rr.registers[24]) * voltage_scaling_factor * 2 ** (-15)
-				graph_data['battvoltage'].append(battery_voltage)
-				graph_data['battwatts'].append(battery_voltage * resp_dict['A0'])
-				target_regulation_voltage = float(rr.registers[51]) * voltage_scaling_factor * 2 ** (-15)
-				# At night this value plummets to zero and screws up the graph, so let's follow the voltage
-				# for night time mode
-				if target_regulation_voltage == 0:
-					target_regulation_voltage = battery_voltage
-				graph_data['targetbattvoltage'].append(target_regulation_voltage)
-				output_power = float(rr.registers[58]) * voltage_scaling_factor * amperage_scaling_factor * 2 ** (
-					-17)
-				graph_data['solarwatts'].append(output_power)
+		global current_graph
+		global graph_data
+		graph_data['time'].append(datetime.datetime.now())
+		graph_data['battload'].append(current_data["battery_load"])
+		graph_data['battvoltage'].append(current_data["battery_voltage"])
+		graph_data['battwatts'].append(current_data["battery_voltage"] * current_data["battery_load"]);
+		# At night this value plummets to zero and screws up the graph, so let's follow the voltage
+		# for night time mode
+		if current_data["target_regulation_voltage"] == 0:
+			graph_data['gargetbatvoltage'].append(current_data["battery_voltage"])
+		else:
+			graph_data['targetbattvoltage'].append(current_data["target_regulation_voltage"])
+		graph_data['solarwatts'].append(current_data["solar_watts"])
 
-				# If we have more than a days worth of graph data, start rotating out the old data
-				while len(graph_data['time']) > 2880:
-					graph_data['time'].pop(0)
-					graph_data['battload'].pop(0)
-					graph_data['battvoltage'].pop(0)
-					graph_data['battwatts'].pop(0)
-					graph_data['solarwatts'].pop(0)
-					graph_data['targetbattvoltage'].pop(0)
+		# If we have more than a days worth of graph data, start rotating out the old data
+		while len(graph_data['time']) > 2880:
+			graph_data['time'].pop(0)
+			graph_data['battload'].pop(0)
+			graph_data['battvoltage'].pop(0)
+			graph_data['battwatts'].pop(0)
+			graph_data['solarwatts'].pop(0)
+			graph_data['targetbattvoltage'].pop(0)
 
-				modbus_client.close()
-
-				# persist the latest into a file to handle restarts
-				with open('monitor_data.pkl', 'wb') as f:
-					pickle.dump(graph_data, f)
-		except Exception as e:
-			print("Failed to connect to tristar modbus")
-			modbus_client.close()
+		# persist the latest into a file to handle restarts
+		with open('monitor_data.pkl', 'wb') as f:
+			pickle.dump(graph_data, f)
 	elif dash.callback_context.triggered[0]['prop_id'].split('.')[0] == 'next-graph':
 		# The next graph button was pressed, so just update the selected graph and redraw
 		current_graph = (current_graph + 1) % 5
@@ -307,8 +285,15 @@ def main():
 			graph_data = {'battload': [], 'time': [], 'battvoltage': [], 'battwatts': [], 'solarwatts': [], 'targetbattvoltage': []}
 	else:
 		graph_data = {'battload': [], 'time': [], 'battvoltage': [], 'battwatts': [], 'solarwatts': [], 'targetbattvoltage': []}
+	arduino_thread = threading.Thread(target=update_arduino_values, args=())
+	arduino_thread.daemon = True
+	arduino_thread.start()
+	print("Arduino Thread Started")
+	tristar_thread = threading.Thread(target=update_tristar_values, args=())
+	tristar_thread.daemon = True
+	tristar_thread.start()
+	print("Tristar Thread Started")
 	app.run_server(debug=False, host='0.0.0.0')
-
 
 if __name__ == '__main__':
 	main()
