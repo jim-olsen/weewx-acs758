@@ -246,7 +246,7 @@ def update_graph_live(n, n_clicks, n2_clicks):
 		# At night this value plummets to zero and screws up the graph, so let's follow the voltage
 		# for night time mode
 		if current_data["target_regulation_voltage"] == 0:
-			graph_data['gargetbatvoltage'].append(current_data["battery_voltage"])
+			graph_data['targetbattvoltage'].append(current_data["battery_voltage"])
 		else:
 			graph_data['targetbattvoltage'].append(current_data["target_regulation_voltage"])
 		graph_data['solarwatts'].append(current_data["solar_watts"])
