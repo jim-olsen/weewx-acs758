@@ -14,6 +14,7 @@ from os import path
 
 graph_data = {}
 current_data = {}
+stats_data = {}
 # Set this value to the ip of your tristar charge controller
 tristar_addr = '10.0.10.10'
 # Set this value to the base url of your arduino running the acs758 monitoring
@@ -55,7 +56,7 @@ app.layout = html.Div(
 			children=[
 				html.Div(id='live-update-text'),
 				html.Div(id='graph-div', children=[dcc.Graph(id='live-update-graph')]),
-				html.Div(id='stats-div', children=[html.Div(id='live-update-stats')], style={'display': 'none'}),
+				html.Div(id='stats-div', children=[html.Div(id='live-update-stats')], style={'display': 'none', 'height': 270}),
 				html.Div(children=[html.Button('Stats/Graph', id='stats-toggle', n_clicks=0, style={'height': '60px', 'width': '180px'}),
 							html.Div(children=[
 								html.A(html.Button('Refresh', style={'height': '60px', 'width': '80px'}), href='/'),
@@ -108,6 +109,32 @@ def update_arduino_values():
 		time.sleep(5)
 
 #
+# Update the running stats with the latest data
+#
+def update_running_stats():
+	global stats_data
+	while True:
+		try:
+			if ('load_amps' in current_data) & ('battery_voltage' in current_data):
+				stats_data['day_load_wh'] += 0.00139 * (current_data['load_amps'] * current_data['battery_voltage'])
+				stats_data['day_solar_wh'] += 0.00139 * current_data['solar_watts']
+				stats_data['total_load_wh'] += 0.00139 * (current_data['load_amps'] * current_data['battery_voltage'])
+				stats_data['total_solar_wh'] += 0.00139 * current_data['solar_watts']
+				if (current_data['charge_state'] == 'MPPT') & (stats_data['last_charge_state'] == 'NIGHT'):
+					stats_data['last_five_days_net'].pop(0)
+					stats_data['last_five_days_net'].append(stats_data['day_solar_wh'] - stats_data['day_load_wh'])
+					stats_data['total_net'].append(stats_data['day_solar_wh'] - stats_data['day_load_wh'])
+					stats_data['day_load_wh'] = 0
+					stats_data['day_solar_wh'] = 0
+				stats_data['last_charge_state'] = current_data['charge_state']
+			# persist the latest into a file to handle restarts
+			with open('monitor_stats_data.pkl', 'wb') as f:
+				pickle.dump(stats_data, f)
+			time.sleep(5)
+		except Exception as e:
+			print('Failure in updating stats: ' + str(e))
+
+#
 # Update the values from the tristar modbus protocol in the values dictionary
 #
 def update_tristar_values():
@@ -158,14 +185,27 @@ def update_tristar_values():
 #
 # Update the live text elements associated with long running statistics
 @app.callback(Output('live-update-stats', 'children'), [Input('text-interval-component', 'n_intervals')])
-def update_text_metrics(n):
-	table_elements = []
-	header_row = []
+def update_stats_metrics(n):
+	table_rows = []
 	td_style = {'border': '1px solid #fca503', 'text-align': 'center', 'font-size': '30px', 'font-family': 'cursive'}
 
-	table_elements.append(html.Td(style=td_style, children='{0:.2f}'.format(current_data["load_amps"])))
-	header_row.append(html.Th(style=td_style, children='Testing'))
-	return html.Table(style={'width': '100%', 'border': '1px solid #fca503'}, children=[html.Tr(header_row), html.Tr(table_elements)])
+	table_rows.append(html.Tr([
+		html.Td(style=td_style, children="Today's Usage"),
+		html.Td(style=td_style, children='{0:.2f} WH'.format(stats_data['day_load_wh']))]))
+	table_rows.append(html.Tr([
+		html.Td(style=td_style, children="Today's Solar"),
+		html.Td(style=td_style, children='{0:.2f} WH'.format(stats_data['day_solar_wh']))]))
+	table_rows.append(html.Tr([
+		html.Td(style=td_style, children="Net For Day"),
+		html.Td(style=td_style, children='{0:.2f} WH'.format(stats_data['day_solar_wh'] - stats_data['day_load_wh']))]))
+	table_rows.append(html.Tr([
+		html.Td(style=td_style, children="Net For Past Five Days"),
+		html.Td(style=td_style, children='{0:.2f} WH'.format(sum(stats_data['last_five_days_net'])))]))
+	table_rows.append(html.Tr([
+		html.Td(style=td_style, children="All Time Net"),
+		html.Td(style=td_style, children='{0:.2f} WH'.format(sum(stats_data['total_net'])))]))
+
+	return html.Table(style={'width': '100%', 'border': '1px solid #fca503'}, children=table_rows)
 
 #
 # update the text elements displaying the live data point
@@ -299,6 +339,7 @@ def update_graph_live(n, n_clicks):
 
 def main():
 	global graph_data
+	global stats_data
 	if path.exists('monitor_data.pkl'):
 		try:
 			with open('monitor_data.pkl', 'rb') as f:
@@ -307,14 +348,23 @@ def main():
 			graph_data = {'battload': [], 'time': [], 'battvoltage': [], 'battwatts': [], 'solarwatts': [], 'targetbattvoltage': []}
 	else:
 		graph_data = {'battload': [], 'time': [], 'battvoltage': [], 'battwatts': [], 'solarwatts': [], 'targetbattvoltage': []}
+	if path.exists('monitor_stats_data.pkl'):
+		try:
+			with open('monitor_stats_data.pkl', 'rb') as f:
+				stats_data = pickle.loads(f.read())
+		except Exception as e:
+			stats_data = {'total_load_wh': 0, 'total_net': [], 'day_load_wh': 0, 'total_solar_wh': 0, 'day_solar_wh': 0, 'last_charge_state': 'MPPT', 'last_five_days_net': [0, 0, 0, 0, 0]}
+	else:
+		stats_data = {'total_load_wh': 0, 'total_net': [], 'day_load_wh': 0, 'total_solar_wh': 0, 'day_solar_wh': 0, 'last_charge_state': 'MPPT', 'last_five_days_net': [0, 0, 0, 0, 0]}
 	arduino_thread = threading.Thread(target=update_arduino_values, args=())
 	arduino_thread.daemon = True
 	arduino_thread.start()
-	print("Arduino Thread Started")
 	tristar_thread = threading.Thread(target=update_tristar_values, args=())
 	tristar_thread.daemon = True
 	tristar_thread.start()
-	print("Tristar Thread Started")
+	stats_thread = threading.Thread(target=update_running_stats, args=())
+	stats_thread.daemon = True
+	stats_thread.start()
 	app.run_server(debug=False, host='0.0.0.0')
 
 if __name__ == '__main__':
