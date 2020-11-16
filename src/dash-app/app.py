@@ -12,7 +12,6 @@ from pymodbus.client.sync import ModbusTcpClient
 from dash.dependencies import Input, Output
 from os import path
 
-current_graph = 0
 graph_data = {}
 current_data = {}
 # Set this value to the ip of your tristar charge controller
@@ -55,9 +54,9 @@ app.layout = html.Div(
 			style=main_div_style,
 			children=[
 				html.Div(id='live-update-text'),
-				html.Div(id='live-update-button'),
-				dcc.Graph(id='live-update-graph'),
-				html.Div(children=[html.Button('<<< Previous Graph', id='prev-graph', n_clicks=0, style={'height': '60px', 'width': '180px'}),
+				html.Div(id='graph-div', children=[dcc.Graph(id='live-update-graph')]),
+				html.Div(id='stats-div', children=[html.Div(id='live-update-stats')], style={'display': 'none'}),
+				html.Div(children=[html.Button('Stats/Graph', id='stats-toggle', n_clicks=0, style={'height': '60px', 'width': '180px'}),
 							html.Div(children=[
 								html.A(html.Button('Refresh', style={'height': '60px', 'width': '80px'}), href='/'),
 								html.Button('Next Graph >>>', id='next-graph', n_clicks=0, style={'height': '60px', 'width': '180px'})])],
@@ -157,8 +156,19 @@ def update_tristar_values():
 		time.sleep(5)
 
 #
-# Fetch the data from both the tristar charge controller and the arduino running the current sensor and update
-# the text elements displaying the live data point
+# Update the live text elements associated with long running statistics
+@app.callback(Output('live-update-stats', 'children'), [Input('text-interval-component', 'n_intervals')])
+def update_text_metrics(n):
+	table_elements = []
+	header_row = []
+	td_style = {'border': '1px solid #fca503', 'text-align': 'center', 'font-size': '30px', 'font-family': 'cursive'}
+
+	table_elements.append(html.Td(style=td_style, children='{0:.2f}'.format(current_data["load_amps"])))
+	header_row.append(html.Th(style=td_style, children='Testing'))
+	return html.Table(style={'width': '100%', 'border': '1px solid #fca503'}, children=[html.Tr(header_row), html.Tr(table_elements)])
+
+#
+# update the text elements displaying the live data point
 #
 @app.callback(Output('live-update-text', 'children'), [Input('text-interval-component', 'n_intervals')])
 def update_text_metrics(n):
@@ -186,8 +196,7 @@ def update_text_metrics(n):
 #
 # Create the actual graph object, also keeping in mind the currently selected graph that we want to display
 #
-def create_graph():
-	global current_graph
+def create_graph(current_graph):
 
 	fig = plotly.tools.make_subplots(rows=2, cols=1, vertical_spacing=0.2)
 	fig['layout'] = graphStyle
@@ -227,6 +236,27 @@ def create_graph():
 
 	return fig
 
+#
+# Toggle the stats display on or off dependent on the number of clicks.  This is paired with the graph div to implement
+# toggling between the two displays.
+#
+@app.callback(Output('stats-div', 'style'), [Input('stats-toggle', 'n_clicks')])
+def toggle_stats_div(n_clicks):
+	if n_clicks % 2 == 1:
+		return {'display': 'block'}
+	else:
+		return {'display' : 'none'}
+
+#
+# Toggle the graph display on or off dependent on the number of clicks.  This is paired with the stats div to implement
+# toggling between the two displays.
+#
+@app.callback(Output('graph-div', 'style'), [Input('stats-toggle', 'n_clicks')])
+def toggle_graph_div(n_clicks):
+	if n_clicks % 2 == 1:
+		return {'display': 'none'}
+	else:
+		return {'display' : 'block'}
 
 #
 # Our callback for both the next graph button, as well as the interval.  Dash only allows one callback per output.  In
@@ -234,10 +264,10 @@ def create_graph():
 # fetch new data if it is the interval, and adjust the currently selected graph if it is in fact the next graph button
 #
 @app.callback(Output('live-update-graph', 'figure'),
-				[Input('graph-interval-component', 'n_intervals'), Input('next-graph', 'n_clicks'), Input('prev-graph', 'n_clicks')])
-def update_graph_live(n, n_clicks, n2_clicks):
+				[Input('graph-interval-component', 'n_intervals'), Input('next-graph', 'n_clicks')])
+def update_graph_live(n, n_clicks):
+	current_graph = n_clicks % 5
 	if dash.callback_context.triggered[0]['prop_id'].split('.')[0] == 'graph-interval-component':
-		global current_graph
 		global graph_data
 		graph_data['time'].append(datetime.datetime.now())
 		graph_data['battload'].append(current_data["battery_load"])
@@ -263,16 +293,8 @@ def update_graph_live(n, n_clicks, n2_clicks):
 		# persist the latest into a file to handle restarts
 		with open('monitor_data.pkl', 'wb') as f:
 			pickle.dump(graph_data, f)
-	elif dash.callback_context.triggered[0]['prop_id'].split('.')[0] == 'next-graph':
-		# The next graph button was pressed, so just update the selected graph and redraw
-		current_graph = (current_graph + 1) % 5
-	elif dash.callback_context.triggered[0]['prop_id'].split('.')[0] == 'prev-graph':
-		# The next graph button was pressed, so just update the selected graph and redraw
-		current_graph = (current_graph - 1)
-		if current_graph < 0:
-			current_graph = 4
 
-	return create_graph()
+	return create_graph(current_graph)
 
 
 def main():
