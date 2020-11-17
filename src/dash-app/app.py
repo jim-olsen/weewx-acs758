@@ -12,9 +12,9 @@ from pymodbus.client.sync import ModbusTcpClient
 from dash.dependencies import Input, Output
 from os import path
 
-graph_data = {}
+graph_data = {'battload': [], 'time': [], 'battvoltage': [], 'battwatts': [], 'solarwatts': [], 'targetbattvoltage': [], 'net_production': []}
 current_data = {}
-stats_data = {}
+stats_data = {'total_load_wh': 0, 'total_net': [], 'day_load_wh': 0, 'total_solar_wh': 0, 'day_solar_wh': 0, 'last_charge_state': 'MPPT', 'last_five_days_net': [0, 0, 0, 0, 0]}
 # Set this value to the ip of your tristar charge controller
 tristar_addr = '10.0.10.10'
 # Set this value to the base url of your arduino running the acs758 monitoring
@@ -182,6 +182,45 @@ def update_tristar_values():
 			modbus_client.close()
 		time.sleep(5)
 
+
+#
+# Update the graph values in the background
+#
+def update_graph_values():
+	while True:
+		try:
+			global graph_data
+			graph_data['time'].append(datetime.datetime.now())
+			graph_data['battload'].append(current_data["battery_load"])
+			graph_data['battvoltage'].append(current_data["battery_voltage"])
+			graph_data['battwatts'].append(current_data["battery_voltage"] * current_data["battery_load"]);
+			# At night this value plummets to zero and screws up the graph, so let's follow the voltage
+			# for night time mode
+			if current_data["target_regulation_voltage"] == 0:
+				graph_data['targetbattvoltage'].append(current_data["battery_voltage"])
+			else:
+				graph_data['targetbattvoltage'].append(current_data["target_regulation_voltage"])
+			graph_data['solarwatts'].append(current_data["solar_watts"])
+			graph_data['net_production'].append(stats_data['day_solar_wh'] - stats_data['day_load_wh'])
+
+			# If we have more than a days worth of graph data, start rotating out the old data
+			while len(graph_data['time']) > 2880:
+				graph_data['time'].pop(0)
+				graph_data['battload'].pop(0)
+				graph_data['battvoltage'].pop(0)
+				graph_data['battwatts'].pop(0)
+				graph_data['solarwatts'].pop(0)
+				graph_data['targetbattvoltage'].pop(0)
+				graph_data['net_production'].pop(0)
+
+			# persist the latest into a file to handle restarts
+			with open('monitor_data.pkl', 'wb') as f:
+				pickle.dump(graph_data, f)
+		except Exception as e:
+			print("Failed to update graph statistics: " + str(e))
+		time.sleep(60)
+
+
 #
 # Update the live text elements associated with long running statistics
 @app.callback(Output('live-update-stats', 'children'), [Input('text-interval-component', 'n_intervals')])
@@ -198,6 +237,9 @@ def update_stats_metrics(n):
 	table_rows.append(html.Tr([
 		html.Td(style=td_style, children="Net For Day"),
 		html.Td(style=td_style, children='{0:.2f} WH'.format(stats_data['day_solar_wh'] - stats_data['day_load_wh']))]))
+	table_rows.append(html.Tr([
+		html.Td(style=td_style, children="Net For Yesterday"),
+		html.Td(style=td_style, children='{0:.2f} WH'.format(stats_data['last_five_days_net'][4]))]))
 	table_rows.append(html.Tr([
 		html.Td(style=td_style, children="Net For Past Five Days"),
 		html.Td(style=td_style, children='{0:.2f} WH'.format(sum(stats_data['last_five_days_net'])))]))
@@ -242,12 +284,12 @@ def create_graph(current_graph):
 	fig['layout'] = graphStyle
 	fig['layout']['margin'] = {'l': 30, 'r': 10, 'b': 50, 't': 10}
 	fig['layout']['legend'] = {'x': 0, 'y': 1, 'xanchor': 'right'}
-	if current_graph == 0:
+	if current_graph == 1:
 		fig.append_trace(
 			{'x': graph_data['time'], 'y': graph_data['battload'], 'name': 'Load (A)', 'mode': 'lines',
 				'type': 'scatter', 'marker': {'color': '#fca503'}, 'line_shape': 'spline'}, 1, 1)
 		fig['layout']['title'] = {'text': 'Batt (A)', 'xanchor': 'center', 'yanchor': 'bottom', 'x': 0.5, 'y': 0, 'font': {	'color': '#fca503', 'size': 40}}
-	if current_graph == 1:
+	if current_graph == 0:
 		fig.append_trace(
 			{'x': graph_data['time'], 'y': graph_data['battvoltage'], 'name': 'Batt (V)', 'mode': 'lines',
 				'type': 'scatter', 'marker': {'color': '#fca503'}, 'line_shape': 'spline'}, 1, 1)
@@ -273,6 +315,11 @@ def create_graph(current_graph):
 			{'x': graph_data['time'], 'y': graph_data['solarwatts'], 'name': 'Solar (W)', 'mode': 'lines',
 			 'type': 'scatter', 'marker': {'color': '#fbff19'}, 'line_shape': 'spline'}, 1, 1)
 		fig['layout']['title'] = {'text': 'Batt and Solar (W)', 'xanchor': 'center', 'yanchor': 'bottom', 'x': 0.5, 'y': 0, 'font': {	'color': '#fca503', 'size': 40}}
+	if current_graph == 5:
+		fig.append_trace(
+			{'x': graph_data['time'], 'y': graph_data['net_production'], 'name': 'Net WH', 'mode': 'lines',
+			 'type': 'scatter', 'marker': {'color': '#fca503'}, 'line_shape': 'spline'}, 1, 1)
+		fig['layout']['title'] = {'text': 'Net WH', 'xanchor': 'center', 'yanchor': 'bottom', 'x': 0.5, 'y': 0, 'font': {	'color': '#fca503', 'size': 40}}
 
 	return fig
 
@@ -301,40 +348,53 @@ def toggle_graph_div(n_clicks):
 #
 # Our callback for both the next graph button, as well as the interval.  Dash only allows one callback per output.  In
 # this case, we want to adjust the graph based on both of these items, so we check to see which input triggered it and
-# fetch new data if it is the interval, and adjust the currently selected graph if it is in fact the next graph button
+# update the current graph if staying the same, and adjust the currently selected graph if it is in fact the next graph button
 #
 @app.callback(Output('live-update-graph', 'figure'),
 				[Input('graph-interval-component', 'n_intervals'), Input('next-graph', 'n_clicks')])
 def update_graph_live(n, n_clicks):
-	current_graph = n_clicks % 5
-	if dash.callback_context.triggered[0]['prop_id'].split('.')[0] == 'graph-interval-component':
-		global graph_data
-		graph_data['time'].append(datetime.datetime.now())
-		graph_data['battload'].append(current_data["battery_load"])
-		graph_data['battvoltage'].append(current_data["battery_voltage"])
-		graph_data['battwatts'].append(current_data["battery_voltage"] * current_data["battery_load"]);
-		# At night this value plummets to zero and screws up the graph, so let's follow the voltage
-		# for night time mode
-		if current_data["target_regulation_voltage"] == 0:
-			graph_data['targetbattvoltage'].append(current_data["battery_voltage"])
-		else:
-			graph_data['targetbattvoltage'].append(current_data["target_regulation_voltage"])
-		graph_data['solarwatts'].append(current_data["solar_watts"])
-
-		# If we have more than a days worth of graph data, start rotating out the old data
-		while len(graph_data['time']) > 2880:
-			graph_data['time'].pop(0)
-			graph_data['battload'].pop(0)
-			graph_data['battvoltage'].pop(0)
-			graph_data['battwatts'].pop(0)
-			graph_data['solarwatts'].pop(0)
-			graph_data['targetbattvoltage'].pop(0)
-
-		# persist the latest into a file to handle restarts
-		with open('monitor_data.pkl', 'wb') as f:
-			pickle.dump(graph_data, f)
+	current_graph = n_clicks % 6
 
 	return create_graph(current_graph)
+
+
+#
+# Copy the graph data into place, initializing all arrays to the length indicated by the time array.  This protects
+# against empty or missing values from getting things out of whack
+#
+def copy_graph_data(loaded_graph_data):
+	graph_length = 0
+	if 'time' in loaded_graph_data:
+		graph_length = len(loaded_graph_data['time'])
+	if graph_length > 0:
+		graph_data['time'] = [0] * graph_length
+		if 'time' in loaded_graph_data:
+			for i in range(len(loaded_graph_data['time'])):
+				graph_data['time'][i] = loaded_graph_data['time'][i]
+		graph_data['battload'] = [0] * graph_length
+		if 'battload' in loaded_graph_data:
+			for i in range(len(loaded_graph_data['battload'])):
+				graph_data['battload'][i] = loaded_graph_data['battload'][i]
+		graph_data['battvoltage'] = [0] * graph_length
+		if 'battvoltage' in loaded_graph_data:
+			for i in range(len(loaded_graph_data['battvoltage'])):
+				graph_data['battvoltage'][i] = loaded_graph_data['battvoltage'][i]
+		graph_data['battwatts'] = [0] * graph_length
+		if 'battwatts' in loaded_graph_data:
+			for i in range(len(loaded_graph_data['battwatts'])):
+				graph_data['battwatts'][i] = loaded_graph_data['battwatts'][i]
+		graph_data['solarwatts'] = [0] * graph_length
+		if 'solarwatts' in loaded_graph_data:
+			for i in range(len(loaded_graph_data['solarwatts'])):
+				graph_data['solarwatts'][i] = loaded_graph_data['solarwatts'][i]
+		graph_data['targetbattvoltage'] = [0] * graph_length
+		if 'targetbattvoltate' in loaded_graph_data:
+			for i in range(len(loaded_graph_data['targetbattvoltage'])):
+				graph_data['targetbattvoltage'][i] = loaded_graph_data['targetbattvoltage'][i]
+		graph_data['net_production'] = [0] * graph_length
+		if 'net_production' in loaded_graph_data:
+			for i in range(len(loaded_graph_data['net_production'])):
+				graph_data['net_production'][i] = loaded_graph_data['net_production'][i]
 
 
 def main():
@@ -343,19 +403,19 @@ def main():
 	if path.exists('monitor_data.pkl'):
 		try:
 			with open('monitor_data.pkl', 'rb') as f:
-				graph_data = pickle.loads(f.read())
+				# Load into a temp variable so if it fails we stick with initial values
+				loaded_graph_data = pickle.loads(f.read())
+				copy_graph_data(loaded_graph_data)
 		except Exception as e:
-			graph_data = {'battload': [], 'time': [], 'battvoltage': [], 'battwatts': [], 'solarwatts': [], 'targetbattvoltage': []}
-	else:
-		graph_data = {'battload': [], 'time': [], 'battvoltage': [], 'battwatts': [], 'solarwatts': [], 'targetbattvoltage': []}
+			print("Failed to load monitor pkl data: " + str(e))
 	if path.exists('monitor_stats_data.pkl'):
 		try:
 			with open('monitor_stats_data.pkl', 'rb') as f:
-				stats_data = pickle.loads(f.read())
+				# Load into a temp variale so if it fails we stick with the initial values
+				load_stats_data = pickle.loads(f.read())
+				stats_data = load_stats_data
 		except Exception as e:
-			stats_data = {'total_load_wh': 0, 'total_net': [], 'day_load_wh': 0, 'total_solar_wh': 0, 'day_solar_wh': 0, 'last_charge_state': 'MPPT', 'last_five_days_net': [0, 0, 0, 0, 0]}
-	else:
-		stats_data = {'total_load_wh': 0, 'total_net': [], 'day_load_wh': 0, 'total_solar_wh': 0, 'day_solar_wh': 0, 'last_charge_state': 'MPPT', 'last_five_days_net': [0, 0, 0, 0, 0]}
+			print("Failed to load stats monitor pkl data: " + str(e))
 	arduino_thread = threading.Thread(target=update_arduino_values, args=())
 	arduino_thread.daemon = True
 	arduino_thread.start()
@@ -365,6 +425,9 @@ def main():
 	stats_thread = threading.Thread(target=update_running_stats, args=())
 	stats_thread.daemon = True
 	stats_thread.start()
+	graph_thread = threading.Thread(target=update_graph_values, args=())
+	graph_thread.daemon = True
+	graph_thread.start()
 	app.run_server(debug=False, host='0.0.0.0')
 
 if __name__ == '__main__':
