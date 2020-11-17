@@ -374,27 +374,33 @@ def copy_graph_data(loaded_graph_data):
 		graph_data['battload'] = [0] * graph_length
 		if 'battload' in loaded_graph_data:
 			for i in range(len(loaded_graph_data['battload'])):
-				graph_data['battload'][i] = loaded_graph_data['battload'][i]
+				graph_data['battload'].append(loaded_graph_data['battload'][i])
+				graph_data['battload'].pop(0)
 		graph_data['battvoltage'] = [0] * graph_length
 		if 'battvoltage' in loaded_graph_data:
 			for i in range(len(loaded_graph_data['battvoltage'])):
-				graph_data['battvoltage'][i] = loaded_graph_data['battvoltage'][i]
+				graph_data['battvoltage'].append(loaded_graph_data['battvoltage'][i])
+				graph_data['battvoltage'].pop(0)
 		graph_data['battwatts'] = [0] * graph_length
 		if 'battwatts' in loaded_graph_data:
 			for i in range(len(loaded_graph_data['battwatts'])):
-				graph_data['battwatts'][i] = loaded_graph_data['battwatts'][i]
+				graph_data['battwatts'].append(loaded_graph_data['battwatts'][i])
+				graph_data['battwatts'].pop(0)
 		graph_data['solarwatts'] = [0] * graph_length
 		if 'solarwatts' in loaded_graph_data:
 			for i in range(len(loaded_graph_data['solarwatts'])):
-				graph_data['solarwatts'][i] = loaded_graph_data['solarwatts'][i]
+				graph_data['solarwatts'].append(loaded_graph_data['solarwatts'][i])
+				graph_data['solarwatts'].pop(0)
 		graph_data['targetbattvoltage'] = [0] * graph_length
-		if 'targetbattvoltate' in loaded_graph_data:
+		if 'targetbattvoltage' in loaded_graph_data:
 			for i in range(len(loaded_graph_data['targetbattvoltage'])):
-				graph_data['targetbattvoltage'][i] = loaded_graph_data['targetbattvoltage'][i]
+				graph_data['targetbattvoltage'].append(loaded_graph_data['targetbattvoltage'][i])
+				graph_data['targetbattvoltage'].pop(0)
 		graph_data['net_production'] = [0] * graph_length
 		if 'net_production' in loaded_graph_data:
 			for i in range(len(loaded_graph_data['net_production'])):
-				graph_data['net_production'][i] = loaded_graph_data['net_production'][i]
+				graph_data['net_production'].append(loaded_graph_data['net_production'][i])
+				graph_data['net_production'].pop(0)
 
 
 def main():
