@@ -155,7 +155,8 @@ def update_running_stats():
 						if val != 0:
 							avg_sum += val
 							num_valid_entries += 1
-					stats_data['avg_net'] = avg_sum / num_valid_entries
+					if num_valid_entries > 0:
+						stats_data['avg_net'] = avg_sum / num_valid_entries
 
 					stats_data['thirty_days_load'].pop(0)
 					stats_data['thirty_days_load'].append(stats_data['day_load_wh'])
@@ -165,7 +166,8 @@ def update_running_stats():
 						if val != 0:
 							avg_sum += val
 							num_valid_entries += 1
-					stats_data['avg_load'] = avg_sum / num_valid_entries
+					if num_valid_entries > 0:
+						stats_data['avg_load'] = avg_sum / num_valid_entries
 
 					stats_data['thirty_days_solar'].pop(0)
 					stats_data['thirty_days_solar'].append(stats_data['day_solar_wh'])
@@ -175,7 +177,8 @@ def update_running_stats():
 						if val != 0:
 							avg_sum += val
 							num_valid_entries += 1
-					stats_data['avg_solar'] = avg_sum / num_valid_entries
+					if num_valid_entries > 0:
+						stats_data['avg_solar'] = avg_sum / num_valid_entries
 
 					stats_data['total_net'].append(stats_data['day_solar_wh'] - stats_data['day_load_wh'])
 					stats_data['day_load_wh'] = 0
