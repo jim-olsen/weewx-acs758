@@ -311,9 +311,13 @@ def update_stats_metrics(n):
 		html.Td(style=td_style, children='{0:.2f} WH'.format(stats_data['avg_net']))]))
 	table_rows.append(html.Tr([
 		html.Td(style=td_style, children="Yesterday Net"),
-		html.Td(style=td_style, children='{0:.2f} WH'.format(stats_data['thirty_days_net'][4])),
+		html.Td(style=td_style, children='{0:.2f} WH'.format(stats_data['thirty_days_net'][29])),
 		html.Td(style=td_style, children="Five Day Net"),
-		html.Td(style=td_style, children='{0:.2f} WH'.format(sum(stats_data['thirty_days_net'])))]))
+		html.Td(style=td_style, children='{0:.2f} WH'.format(stats_data['thirty_days_net'][29]
+															+ stats_data['thirty_days_net'][28]
+															+ stats_data['thirty_days_net'][27]
+															+ stats_data['thirty_days_net'][26]
+															+ stats_data['thirty_days_net'][25]))]))
 	table_rows.append(html.Tr([
 		html.Td(style=td_style, children="All Time Net"),
 		html.Td(style=td_style, children='{0:.2f} WH'.format(sum(stats_data['total_net'])))]))
@@ -493,6 +497,7 @@ def main():
 		try:
 			with open('monitor_data.pkl', 'rb') as f:
 				# Load into a temp variable so if it fails we stick with initial values
+				print("loading graph data from pkl file")
 				loaded_graph_data = pickle.loads(f.read())
 				copy_graph_data(loaded_graph_data)
 		except Exception as e:
@@ -501,6 +506,7 @@ def main():
 		try:
 			with open('monitor_stats_data.pkl', 'rb') as f:
 				# Load into a temp variale so if it fails we stick with the initial values
+				print("Loading stats data from pkl file")
 				load_stats_data = pickle.loads(f.read())
 				stats_data = load_stats_data
 		except Exception as e:
