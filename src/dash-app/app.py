@@ -173,7 +173,7 @@ def update_running_stats():
 					stats_data['thirty_days_solar'].append(stats_data['day_solar_wh'])
 					num_valid_entries = 0.0
 					avg_sum = 0.0
-					for val in stats_data['thirty_days_load']:
+					for val in stats_data['thirty_days_solar']:
 						if val != 0:
 							avg_sum += val
 							num_valid_entries += 1
