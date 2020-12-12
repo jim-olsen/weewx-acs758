@@ -513,7 +513,7 @@ def main():
 				# Load into a temp variale so if it fails we stick with the initial values
 				print("Loading stats data from pkl file")
 				load_stats_data = pickle.loads(f.read())
-				for key, value in load_stats_data:
+				for key, value in load_stats_data.items():
 					stats_data[key] = value
 		except Exception as e:
 			print("Failed to load stats monitor pkl data: " + str(e))
