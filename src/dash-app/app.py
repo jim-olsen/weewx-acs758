@@ -28,6 +28,7 @@ stats_data = {
 	'day_load_wh': 0,
 	'total_solar_wh': 0,
 	'day_solar_wh': 0,
+	'day_batt_wh': 0,
 	'last_charge_state': 'MPPT',
 	'avg_load': 0.0,
 	'avg_net': 0.0,
@@ -144,6 +145,7 @@ def update_running_stats():
 			if ('load_amps' in current_data) & ('battery_voltage' in current_data):
 				stats_data['day_load_wh'] += 0.00139 * (current_data['load_amps'] * current_data['battery_voltage'])
 				stats_data['day_solar_wh'] += 0.00139 * current_data['solar_watts']
+				stats_data['day_batt_wh'] += 0.00139 * current_data['battery_load'] * current_data['battery_voltage']
 				stats_data['total_load_wh'] += 0.00139 * (current_data['load_amps'] * current_data['battery_voltage'])
 				stats_data['total_solar_wh'] += 0.00139 * current_data['solar_watts']
 				if (current_data['charge_state'] == 'MPPT') & (stats_data['last_charge_state'] == 'NIGHT'):
@@ -183,6 +185,7 @@ def update_running_stats():
 					stats_data['total_net'].append(stats_data['day_solar_wh'] - stats_data['day_load_wh'])
 					stats_data['day_load_wh'] = 0
 					stats_data['day_solar_wh'] = 0
+					stats_data['day_batt_wh'] = 0
 
 				stats_data['last_charge_state'] = current_data['charge_state']
 			# persist the latest into a file to handle restarts
@@ -319,6 +322,8 @@ def update_stats_metrics(n):
 															+ stats_data['thirty_days_net'][26]
 															+ stats_data['thirty_days_net'][25]))]))
 	table_rows.append(html.Tr([
+		html.Td(style=td_style, children="Today's Battery Use"),
+		html.Td(style=td_style, children='{0:.2f} WH'.format(stats_data['day_batt_wh'])),
 		html.Td(style=td_style, children="All Time Net"),
 		html.Td(style=td_style, children='{0:.2f} WH'.format(sum(stats_data['total_net'])))]))
 
@@ -508,7 +513,8 @@ def main():
 				# Load into a temp variale so if it fails we stick with the initial values
 				print("Loading stats data from pkl file")
 				load_stats_data = pickle.loads(f.read())
-				stats_data = load_stats_data
+				for key, value in load_stats_data:
+					stats_data[key] = value
 		except Exception as e:
 			print("Failed to load stats monitor pkl data: " + str(e))
 	arduino_thread = threading.Thread(target=update_arduino_values, args=())
