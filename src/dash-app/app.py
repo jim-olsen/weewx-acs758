@@ -315,7 +315,7 @@ def update_stats_metrics(n):
 	table_rows.append(html.Tr([
 		html.Td(style=td_style, children="Yesterday Net"),
 		html.Td(style=td_style, children='{0:.2f} WH'.format(stats_data['thirty_days_net'][29])),
-		html.Td(style=td_style, children="Yesterday Usage"),
+		html.Td(style=td_style, children="Yesterday Use"),
 		html.Td(style=td_style, children='{0:.2f} WH'.format(stats_data['thirty_days_load'][29]))]))
 	table_rows.append(html.Tr([
 		html.Td(style=td_style, children="Today's Battery Use"),
