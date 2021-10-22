@@ -1,4 +1,6 @@
 import datetime
+import shutil
+
 import dash
 import dash_core_components as dcc
 import dash_html_components as html
@@ -35,7 +37,8 @@ stats_data = {
 	'avg_solar': 0.0,
 	'thirty_days_net': [0] * 30,
 	'thirty_days_load': [0] * 30,
-	'thirty_days_solar': [0] * 30
+	'thirty_days_solar': [0] * 30,
+	'thirty_days_batt_wh': [0] * 30
 }
 # Set this value to the ip of your tristar charge controller
 tristar_addr = '10.0.10.10'
@@ -149,6 +152,9 @@ def update_running_stats():
 				stats_data['total_load_wh'] += 0.00139 * (current_data['load_amps'] * current_data['battery_voltage'])
 				stats_data['total_solar_wh'] += 0.00139 * current_data['solar_watts']
 				if (current_data['charge_state'] == 'MPPT') & (stats_data['last_charge_state'] == 'NIGHT'):
+					stats_data['thirty_days_batt_wh'].pop(0)
+					stats_data['thirty_days_batt_wh'].append(stats_data['day_batt_wh'])
+
 					stats_data['thirty_days_net'].pop(0)
 					stats_data['thirty_days_net'].append(stats_data['day_solar_wh'] - stats_data['day_load_wh'])
 					num_valid_entries = 0.0
@@ -189,8 +195,9 @@ def update_running_stats():
 
 				stats_data['last_charge_state'] = current_data['charge_state']
 			# persist the latest into a file to handle restarts
-			with open('monitor_stats_data.pkl', 'wb') as f:
+			with open('monitor_stats_data.pkl.tmp', 'wb') as f:
 				pickle.dump(stats_data, f)
+			shutil.move(os.path.join(os.getcwd(), 'monitor_stats_data.pkl.tmp'), os.path.join(os.getcwd(), 'monitor_stats_data.pkl'))
 			time.sleep(5)
 		except Exception as e:
 			print('Failure in updating stats: ' + str(e))
@@ -283,8 +290,9 @@ def update_graph_values():
 				graph_data['net_production'].pop(0)
 
 			# persist the latest into a file to handle restarts
-			with open('monitor_data.pkl', 'wb') as f:
+			with open('monitor_data.pkl.tmp', 'wb') as f:
 				pickle.dump(graph_data, f)
+			shutil.move(os.path.join(os.getcwd(), 'monitor_data.pkl.tmp'), os.path.join(os.getcwd(), 'monitor_data.pkl'))
 		except Exception as e:
 			print("Failed to update graph statistics: " + str(e))
 		time.sleep(60)
@@ -320,12 +328,12 @@ def update_stats_metrics(n):
 	table_rows.append(html.Tr([
 		html.Td(style=td_style, children="Today's Battery Use"),
 		html.Td(style=td_style, children='{0:.2f} WH'.format(stats_data['day_batt_wh'])),
-		html.Td(style=td_style, children="Five Day Net"),
-		html.Td(style=td_style, children='{0:.2f} WH'.format(stats_data['thirty_days_net'][29]
-															 + stats_data['thirty_days_net'][28]
-															 + stats_data['thirty_days_net'][27]
-															 + stats_data['thirty_days_net'][26]
-															 + stats_data['thirty_days_net'][25]))]))
+		html.Td(style=td_style, children="5 Day Batt WH"),
+		html.Td(style=td_style, children='{0:.2f} WH'.format(stats_data['thirty_days_batt_wh'][29]
+															 + stats_data['thirty_days_batt_wh'][28]
+															 + stats_data['thirty_days_batt_wh'][27]
+															 + stats_data['thirty_days_batt_wh'][26]
+															 + stats_data['thirty_days_batt_wh'][25]))]))
 
 	return html.Table(style={'width': '100%', 'border': '1px solid #fca503'}, children=table_rows)
 
