@@ -306,17 +306,17 @@ def update_stats_metrics(n):
 	td_style = {'border': '1px solid #fca503', 'text-align': 'center', 'font-size': '30px', 'font-family': 'cursive'}
 
 	table_rows.append(html.Tr([
-		html.Td(style=td_style, children="Today's Usage"),
+		html.Td(style=td_style, children="Today Usage"),
 		html.Td(style=td_style, children='{0:.2f} WH'.format(stats_data['day_load_wh'])),
 		html.Td(style=td_style, children="Avg Usage"),
 		html.Td(style=td_style, children='{0:.2f} WH'.format(stats_data['avg_load']))]))
 	table_rows.append(html.Tr([
-		html.Td(style=td_style, children="Today's Solar"),
+		html.Td(style=td_style, children="Today Solar"),
 		html.Td(style=td_style, children='{0:.2f} WH'.format(stats_data['day_solar_wh'])),
 		html.Td(style=td_style, children="Avg Solar"),
 		html.Td(style=td_style, children='{0:.2f} WH'.format(stats_data['avg_solar']))]))
 	table_rows.append(html.Tr([
-		html.Td(style=td_style, children="Today's Net"),
+		html.Td(style=td_style, children="Today Net"),
 		html.Td(style=td_style, children='{0:.2f} WH'.format(stats_data['day_solar_wh'] - stats_data['day_load_wh'])),
 		html.Td(style=td_style, children="Avg Net"),
 		html.Td(style=td_style, children='{0:.2f} WH'.format(stats_data['avg_net']))]))
@@ -326,14 +326,14 @@ def update_stats_metrics(n):
 		html.Td(style=td_style, children="Yesterday Use"),
 		html.Td(style=td_style, children='{0:.2f} WH'.format(stats_data['thirty_days_load'][29]))]))
 	table_rows.append(html.Tr([
-		html.Td(style=td_style, children="Today's Battery Use"),
+		html.Td(style=td_style, children="Today Batt Use"),
 		html.Td(style=td_style, children='{0:.2f} WH'.format(stats_data['day_batt_wh'])),
-		html.Td(style=td_style, children="5 Day Net WH"),
-		html.Td(style=td_style, children='{0:.2f} WH'.format(stats_data['thirty_days_batt_wh'][29]
+		html.Td(style=td_style, children="Five Day Net"),
+		html.Td(style=td_style, children='{0:.2f} WH'.format((stats_data['thirty_days_batt_wh'][29]
 															 + stats_data['thirty_days_batt_wh'][28]
 															 + stats_data['thirty_days_batt_wh'][27]
 															 + stats_data['thirty_days_batt_wh'][26]
-															 + stats_data['thirty_days_batt_wh'][25]))]))
+															 + stats_data['thirty_days_batt_wh'][25]) * -1))]))
 
 	return html.Table(style={'width': '100%', 'border': '1px solid #fca503'}, children=table_rows)
 
