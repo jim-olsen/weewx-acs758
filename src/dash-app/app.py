@@ -329,11 +329,11 @@ def update_stats_metrics(n):
 		html.Td(style=td_style, children="Today Batt Use"),
 		html.Td(style=td_style, children='{0:.2f} WH'.format(stats_data['day_batt_wh'])),
 		html.Td(style=td_style, children="Five Day Net"),
-		html.Td(style=td_style, children='{0:.2f} WH'.format((stats_data['thirty_days_batt_wh'][29]
+		html.Td(style=td_style, children='{0:.2f} WH'.format((stats_data['day_batt_wh']
+															 + stats_data['thirty_days_batt_wh'][29]
 															 + stats_data['thirty_days_batt_wh'][28]
 															 + stats_data['thirty_days_batt_wh'][27]
-															 + stats_data['thirty_days_batt_wh'][26]
-															 + stats_data['thirty_days_batt_wh'][25]) * -1))]))
+															 + stats_data['thirty_days_batt_wh'][26]) * -1))]))
 
 	return html.Table(style={'width': '100%', 'border': '1px solid #fca503'}, children=table_rows)
 
