@@ -10,6 +10,7 @@ import requests
 import time
 import threading
 import os
+from datetime import datetime
 from pymodbus.client.sync import ModbusTcpClient
 from dash.dependencies import Input, Output
 from os import path
@@ -25,6 +26,7 @@ graph_data = {
 }
 current_data = {}
 stats_data = {
+	'current_date': datetime.today(),
 	'total_load_wh': 0,
 	'total_net': [],
 	'day_load_wh': 0,
@@ -151,7 +153,7 @@ def update_running_stats():
 				stats_data['day_batt_wh'] += 0.00139 * current_data['battery_load'] * current_data['battery_voltage']
 				stats_data['total_load_wh'] += 0.00139 * (current_data['load_amps'] * current_data['battery_voltage'])
 				stats_data['total_solar_wh'] += 0.00139 * current_data['solar_watts']
-				if (current_data['charge_state'] == 'MPPT') & (stats_data['last_charge_state'] == 'NIGHT'):
+				if stats_data['current_date'] != datetime.today().date():
 					stats_data['thirty_days_batt_wh'].pop(0)
 					stats_data['thirty_days_batt_wh'].append(stats_data['day_batt_wh'])
 
