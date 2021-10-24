@@ -26,7 +26,7 @@ graph_data = {
 }
 current_data = {}
 stats_data = {
-	'current_date': datetime.today(),
+	'current_date': datetime.today().date(),
 	'total_load_wh': 0,
 	'total_net': [],
 	'day_load_wh': 0,
@@ -154,6 +154,8 @@ def update_running_stats():
 				stats_data['total_load_wh'] += 0.00139 * (current_data['load_amps'] * current_data['battery_voltage'])
 				stats_data['total_solar_wh'] += 0.00139 * current_data['solar_watts']
 				if stats_data['current_date'] != datetime.today().date():
+					print('Start of new day : ' + str(stats_data['current_date']) + ' ---> ' + str(datetime.today().date()))
+					stats_data['current_date'] = datetime.today().date()
 					stats_data['thirty_days_batt_wh'].pop(0)
 					stats_data['thirty_days_batt_wh'].append(stats_data['day_batt_wh'])
 
@@ -271,7 +273,7 @@ def update_graph_values():
 			graph_data['time'].append(datetime.datetime.now())
 			graph_data['battload'].append(current_data["battery_load"])
 			graph_data['battvoltage'].append(current_data["battery_voltage"])
-			graph_data['battwatts'].append(current_data["battery_voltage"] * current_data["battery_load"]);
+			graph_data['battwatts'].append(current_data["battery_voltage"] * current_data["battery_load"])
 			# At night this value plummets to zero and screws up the graph, so let's follow the voltage
 			# for night time mode
 			if current_data["target_regulation_voltage"] == 0:
