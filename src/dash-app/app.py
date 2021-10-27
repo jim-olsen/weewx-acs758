@@ -270,7 +270,7 @@ def update_graph_values():
 	while True:
 		try:
 			global graph_data
-			graph_data['time'].append(datetime.datetime.now())
+			graph_data['time'].append(datetime.now())
 			graph_data['battload'].append(current_data["battery_load"])
 			graph_data['battvoltage'].append(current_data["battery_voltage"])
 			graph_data['battwatts'].append(current_data["battery_voltage"] * current_data["battery_load"])
